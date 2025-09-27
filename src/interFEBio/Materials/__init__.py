@@ -118,6 +118,9 @@ class FEBodyForce(FEBioEntity):
 class FEBoundaryCondition(FEBioEntity):
     pass
 
+class FEContactInterface(FEBioEntity):
+    pass
+
 class FECoreClass(FEBioEntity):
     pass
 
@@ -176,6 +179,9 @@ class FEPrescribedSurface(FEBioEntity):
     pass
 
 class FEPrestrainGradient(FEBioEntity):
+    pass
+
+class FESurfaceConstraint(FEBioEntity):
     pass
 
 class FESurfaceLoad(FEBioEntity):

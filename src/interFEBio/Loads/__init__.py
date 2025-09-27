@@ -108,6 +108,9 @@ from ..common.regions import (
 class FEBoundaryCondition(FEBioEntity):
     pass
 
+class FEContactInterface(FEBioEntity):
+    pass
+
 class FECoreClass(FEBioEntity):
     pass
 
@@ -130,6 +133,9 @@ class FEPrescribedNodeSet(FEBioEntity):
     pass
 
 class FEPrescribedSurface(FEBioEntity):
+    pass
+
+class FESurfaceConstraint(FEBioEntity):
     pass
 
 class mat3d(FEBioEntity):
@@ -182,9 +188,15 @@ class FEBodyForce(FEBodyLoad):
 
 
 __all__ = [
+    'FEBearingLoad',
     'FECentrifugalBodyForce',
+    'FEConstBodyForceOld',
+    'FEGenericBodyForce',
     'FENodalForce',
+    'FENonConstBodyForceOld',
     'FEPressureLoad',
+    'FESurfaceForceUniform',
+    'FETractionLoad',
     'Vec3d',
     'NodeSetRef',
     'SurfaceRef',
@@ -196,11 +208,39 @@ __all__ = [
 ]
 
 @dataclass
+class FEBearingLoad(FESurfaceLoad):
+    scale: Optional[float] = field(default=None, metadata={'fe_name': 'scale'})
+    force: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'force'})
+    symmetric_stiffness: Optional[bool] = field(default=None, metadata={'fe_name': 'symmetric_stiffness'})
+    linear: Optional[bool] = field(default=None, metadata={'fe_name': 'linear'})
+    shell_bottom: Optional[bool] = field(default=None, metadata={'fe_name': 'shell_bottom'})
+    profile: Optional[int] = field(default=None, metadata={'fe_name': 'profile'})
+    fe_class: str = field(init=False, default='bearing load')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
 class FECentrifugalBodyForce(FEBodyForce):
     angular_speed: Optional[float] = field(default=None, metadata={'fe_name': 'angular_speed', 'units': 'UNIT_ANGULAR_VELOCITY'})
     rotation_axis: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'rotation_axis'})
     rotation_center: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'rotation_center', 'units': 'UNIT_LENGTH'})
     fe_class: str = field(init=False, default='centrifugal')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
+class FEConstBodyForceOld(FEBodyForce):
+    x: Optional[Any] = field(default=None, metadata={'fe_name': 'x'})
+    y: Optional[Any] = field(default=None, metadata={'fe_name': 'y'})
+    z: Optional[Any] = field(default=None, metadata={'fe_name': 'z'})
+    fe_class: str = field(init=False, default='const')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
+class FEGenericBodyForce(FEBodyForce):
+    force: Optional[FEParamVec3] = field(default=None, metadata={'fe_name': 'force', 'units': 'UNIT_SPECIFIC_FORCE'})
+    fe_class: str = field(init=False, default='body force')
     xml_tag: str = field(init=False, default='load')
     xml_section: str = field(init=False, default='Loads')
 
@@ -213,11 +253,39 @@ class FENodalForce(FENodalLoad):
     xml_section: str = field(init=False, default='Loads')
 
 @dataclass
+class FENonConstBodyForceOld(FEBodyForce):
+    x: Optional[Any] = field(default=None, metadata={'fe_name': 'x'})
+    y: Optional[Any] = field(default=None, metadata={'fe_name': 'y'})
+    z: Optional[Any] = field(default=None, metadata={'fe_name': 'z'})
+    fe_class: str = field(init=False, default='non-const')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
 class FEPressureLoad(FESurfaceLoad):
     pressure: Optional[float] = field(default=None, metadata={'fe_name': 'pressure', 'units': 'UNIT_PRESSURE'})
     symmetric_stiffness: Optional[bool] = field(default=None, metadata={'fe_name': 'symmetric_stiffness'})
     linear: Optional[bool] = field(default=None, metadata={'fe_name': 'linear'})
     shell_bottom: Optional[bool] = field(default=None, metadata={'fe_name': 'shell_bottom'})
     fe_class: str = field(init=False, default='pressure')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
+class FESurfaceForceUniform(FESurfaceLoad):
+    scale: Optional[float] = field(default=None, metadata={'fe_name': 'scale'})
+    force: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'force', 'units': 'UNIT_FORCE'})
+    shell_bottom: Optional[bool] = field(default=None, metadata={'fe_name': 'shell_bottom'})
+    fe_class: str = field(init=False, default='force')
+    xml_tag: str = field(init=False, default='load')
+    xml_section: str = field(init=False, default='Loads')
+
+@dataclass
+class FETractionLoad(FESurfaceLoad):
+    scale: Optional[float] = field(default=None, metadata={'fe_name': 'scale'})
+    traction: Optional[FEParamVec3] = field(default=None, metadata={'fe_name': 'traction', 'units': 'UNIT_PRESSURE'})
+    shell_bottom: Optional[bool] = field(default=None, metadata={'fe_name': 'shell_bottom'})
+    linear: Optional[bool] = field(default=None, metadata={'fe_name': 'linear'})
+    fe_class: str = field(init=False, default='traction')
     xml_tag: str = field(init=False, default='load')
     xml_section: str = field(init=False, default='Loads')

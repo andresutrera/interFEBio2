@@ -108,6 +108,9 @@ from .value_types import Vec3d, mat3d, mat3ds
 class FEBoundaryCondition(FEBioEntity):
     pass
 
+class FEContactInterface(FEBioEntity):
+    pass
+
 class FECoreClass(FEBioEntity):
     pass
 
@@ -127,6 +130,9 @@ class FEPrescribedNodeSet(FEBioEntity):
     pass
 
 class FEPrescribedSurface(FEBioEntity):
+    pass
+
+class FESurfaceConstraint(FEBioEntity):
     pass
 
 class tens3drs(FEBioEntity):
