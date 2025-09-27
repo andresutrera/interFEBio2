@@ -5,6 +5,10 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Optional
 import xml.etree.ElementTree as ET
 
+from . import parameters
+from .parameters import FEParamDouble, FEParamMat3d, FEParamMat3ds, FEParamVec3, MeshMappedValue
+from .value_types import Vec3d, mat3d, mat3ds
+
 def _indent(element: ET.Element, level: int = 0) -> None:
     '''Recursively indent an XML tree for pretty-printing.'''
 
@@ -95,28 +99,21 @@ class FEBioEntity:
         _indent(element)
         return ET.tostring(element, encoding='unicode')
 
-@dataclass
-class Vec3d:
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
-
-    def __str__(self) -> str:
-        return f"{self.x}, {self.y}, {self.z}"
-
 class FEMat3dValuator(FEBioEntity):
     pass
 
 class FEMat3dsValuator(FEBioEntity):
     pass
-
-class mat3d(FEBioEntity):
-    pass
-
-class mat3ds(FEBioEntity):
-    pass
-
 __all__ = [
+    'Vec3d',
+    'mat3d',
+    'mat3ds',
+    'MeshMappedValue',
+    'FEParamDouble',
+    'FEParamVec3',
+    'FEParamMat3d',
+    'FEParamMat3ds',
+    'parameters',
     'FEConstValueMat3d',
     'FEConstValueMat3ds',
     'FEMappedValueMat3d',
