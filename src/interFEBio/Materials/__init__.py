@@ -112,6 +112,15 @@ class Vec3d:
     def __str__(self) -> str:
         return f"{self.x}, {self.y}, {self.z}"
 
+class FEBodyForce(FEBioEntity):
+    pass
+
+class FEBoundaryCondition(FEBioEntity):
+    pass
+
+class FECoreClass(FEBioEntity):
+    pass
+
 class FEDamageCDF(FEBioEntity):
     pass
 
@@ -139,16 +148,37 @@ class FEDamageCriterion(FEBioEntity):
 class FEElasticMaterial(FEBioEntity):
     pass
 
+class FEFixedBC(FEBioEntity):
+    pass
+
 class FEMat3dValuator(FEBioEntity):
     pass
 
 class FEMat3dsValuator(FEBioEntity):
     pass
 
+class FENodalBC(FEBioEntity):
+    pass
+
+class FENodalLoad(FEBioEntity):
+    pass
+
 class FEParamMat3d(FEBioEntity):
     pass
 
+class FEParamVec3(FEBioEntity):
+    pass
+
+class FEPrescribedNodeSet(FEBioEntity):
+    pass
+
+class FEPrescribedSurface(FEBioEntity):
+    pass
+
 class FEPrestrainGradient(FEBioEntity):
+    pass
+
+class FESurfaceLoad(FEBioEntity):
     pass
 
 class FEUncoupledMaterial(FEBioEntity):
@@ -158,6 +188,9 @@ class mat3d(FEBioEntity):
     pass
 
 class mat3ds(FEBioEntity):
+    pass
+
+class tens3drs(FEBioEntity):
     pass
 
 __all__ = [
@@ -177,33 +210,33 @@ __all__ = [
 class FEConstPrestrainGradient(FEPrestrainGradient):
     ramp: Optional[float] = field(default=None, metadata={'fe_name': 'ramp'})
     f0: Optional[FEParamMat3d] = field(default=None, metadata={'fe_name': 'F0'})
-    fe_class: str = 'prestrain gradient'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='prestrain gradient')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEDamageCDFSimo(FEDamageCDF):
     a: Optional[float] = field(default=None, metadata={'fe_name': 'a', 'range': {'min': 0.0, 'min_inclusive': False}})
     b: Optional[float] = field(default=None, metadata={'fe_name': 'b', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
-    fe_class: str = 'CDF Simo'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='CDF Simo')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEDamageCriterionDrucker(FEDamageCriterion):
     c: Optional[float] = field(default=None, metadata={'fe_name': 'c', 'range': {'min': '-27.0/8.0', 'max': '9.0/4.0', 'min_inclusive': True, 'max_inclusive': True}})
-    fe_class: str = 'DC Drucker shear stress'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='DC Drucker shear stress')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEDamageMaterialUC(FEUncoupledMaterial):
     elastic: Optional[FEUncoupledMaterial] = field(default=None, metadata={'fe_name': 'elastic', 'is_property': True})
     damage: Optional[FEDamageCDF | FEDamageCDFSimo | FEDamageCDFLogNormal | FEDamageCDFWeibull | FEDamageCDFStep | FEDamageCDFPQP | FEDamageCDFGamma | FEDamageCDFUser] = field(default=None, metadata={'fe_name': 'damage', 'is_property': True})
     criterion: Optional[FEDamageCriterionDrucker] = field(default=None, metadata={'fe_name': 'criterion', 'is_property': True})
-    fe_class: str = 'uncoupled elastic damage'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='uncoupled elastic damage')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEFungOrthotropic(FEUncoupledMaterial):
@@ -218,40 +251,40 @@ class FEFungOrthotropic(FEUncoupledMaterial):
     v31: Optional[float] = field(default=None, metadata={'fe_name': 'v31'})
     c: Optional[float] = field(default=None, metadata={'fe_name': 'c', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
     mat_axis: Optional[FEConstValueMat3d | FEMat3dLocalElementMap | FEMat3dSphericalMap | FEMat3dCylindricalMap | FEMat3dPolarMap | FEMat3dVectorMap | FEMappedValueMat3d] = field(default=None, metadata={'fe_name': 'mat_axis', 'is_property': True})
-    fe_class: str = 'Fung orthotropic'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='Fung orthotropic')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEIncompNeoHookean(FEUncoupledMaterial):
     g: Optional[float] = field(default=None, metadata={'fe_name': 'G', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': 'shear modulus'})
-    fe_class: str = 'incomp neo-Hookean'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='incomp neo-Hookean')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEIsotropicElastic(FEElasticMaterial):
     e: Optional[int] = field(default=None, metadata={'fe_name': 'E', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': "Young's modulus"})
     v: Optional[int] = field(default=None, metadata={'fe_name': 'v', 'range': {'min': -1.0, 'max': 0.5, 'min_inclusive': True, 'max_inclusive': False}, 'long_name': "Poisson's ratio"})
-    fe_class: str = 'FEIsotropicElastic'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='FEIsotropicElastic')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEPreStrainUncoupledElastic(FEUncoupledMaterial):
     elastic: Optional[FEUncoupledMaterial] = field(default=None, metadata={'fe_name': 'elastic', 'is_property': True})
     prestrain: Optional[FEPrestrainGradient] = field(default=None, metadata={'fe_name': 'prestrain', 'is_property': True})
-    fe_class: str = 'uncoupled prestrain elastic'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='uncoupled prestrain elastic')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEPrestrainElastic(FEElasticMaterial):
     elastic: Optional[FEElasticMaterial] = field(default=None, metadata={'fe_name': 'elastic', 'is_property': True})
     prestrain: Optional[FEPrestrainGradient] = field(default=None, metadata={'fe_name': 'prestrain', 'is_property': True})
-    fe_class: str = 'prestrain elastic'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='prestrain elastic')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')
 
 @dataclass
 class FEYeoh(FEUncoupledMaterial):
@@ -261,6 +294,6 @@ class FEYeoh(FEUncoupledMaterial):
     c4: Optional[Any] = field(default=None, metadata={'fe_name': 'c4', 'units': 'UNIT_PRESSURE'})
     c5: Optional[Any] = field(default=None, metadata={'fe_name': 'c5', 'units': 'UNIT_PRESSURE'})
     c6: Optional[Any] = field(default=None, metadata={'fe_name': 'c6', 'units': 'UNIT_PRESSURE'})
-    fe_class: str = 'Yeoh'
-    xml_tag: str = 'material'
-    xml_section: str = 'Materials'
+    fe_class: str = field(init=False, default='Yeoh')
+    xml_tag: str = field(init=False, default='material')
+    xml_section: str = field(init=False, default='Materials')

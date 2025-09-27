@@ -5,10 +5,6 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Optional
 import xml.etree.ElementTree as ET
 
-from . import parameters
-from .parameters import FEParamDouble, FEParamMat3d, FEParamMat3ds, FEParamVec3, MeshMappedValue
-from .value_types import Vec3d, mat3d, mat3ds
-
 def _indent(element: ET.Element, level: int = 0) -> None:
     '''Recursively indent an XML tree for pretty-printing.'''
 
@@ -99,21 +95,44 @@ class FEBioEntity:
         _indent(element)
         return ET.tostring(element, encoding='unicode')
 
+from .parameters import (
+    FEParamDouble,
+    FEParamVec3,
+    FEParamMat3d,
+    FEParamMat3ds,
+    MeshMappedValue,
+)
+from . import parameters
+from .value_types import Vec3d, mat3d, mat3ds
+
+class FEBoundaryCondition(FEBioEntity):
+    pass
+
+class FECoreClass(FEBioEntity):
+    pass
+
+class FEFixedBC(FEBioEntity):
+    pass
+
 class FEMat3dValuator(FEBioEntity):
     pass
 
 class FEMat3dsValuator(FEBioEntity):
     pass
+
+class FENodalBC(FEBioEntity):
+    pass
+
+class FEPrescribedNodeSet(FEBioEntity):
+    pass
+
+class FEPrescribedSurface(FEBioEntity):
+    pass
+
+class tens3drs(FEBioEntity):
+    pass
+
 __all__ = [
-    'Vec3d',
-    'mat3d',
-    'mat3ds',
-    'MeshMappedValue',
-    'FEParamDouble',
-    'FEParamVec3',
-    'FEParamMat3d',
-    'FEParamMat3ds',
-    'parameters',
     'FEConstValueMat3d',
     'FEConstValueMat3ds',
     'FEMappedValueMat3d',
@@ -124,51 +143,60 @@ __all__ = [
     'FEMat3dSphericalAngleMap',
     'FEMat3dSphericalMap',
     'FEMat3dVectorMap',
+    'Vec3d',
+    'mat3d',
+    'mat3ds',
+    'MeshMappedValue',
+    'FEParamDouble',
+    'FEParamVec3',
+    'FEParamMat3d',
+    'FEParamMat3ds',
+    'parameters',
 ]
 
 @dataclass
 class FEConstValueMat3d(FEMat3dValuator):
     const: Optional[mat3d] = field(default=None, metadata={'fe_name': 'const'})
-    fe_class: str = 'const'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='const')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEConstValueMat3ds(FEMat3dsValuator):
     const: Optional[mat3ds] = field(default=None, metadata={'fe_name': 'const'})
-    fe_class: str = 'const'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='const')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMappedValueMat3d(FEMat3dValuator):
     map: Optional[str] = field(default=None, metadata={'fe_name': 'map'})
-    fe_class: str = 'map'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='map')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMappedValueMat3ds(FEMat3dsValuator):
     map: Optional[str] = field(default=None, metadata={'fe_name': 'map'})
-    fe_class: str = 'map'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='map')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dCylindricalMap(FEMat3dValuator):
     center: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'center'})
     axis: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'axis'})
     vector: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'vector'})
-    fe_class: str = 'cylindrical'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='cylindrical')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dLocalElementMap(FEMat3dValuator):
     local: Optional[int] = field(default=None, metadata={'fe_name': 'local'})
-    fe_class: str = 'local'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='local')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dPolarMap(FEMat3dValuator):
@@ -178,30 +206,30 @@ class FEMat3dPolarMap(FEMat3dValuator):
     vector2: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'vector2'})
     radius1: Optional[float] = field(default=None, metadata={'fe_name': 'radius1'})
     radius2: Optional[float] = field(default=None, metadata={'fe_name': 'radius2'})
-    fe_class: str = 'polar'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='polar')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dSphericalAngleMap(FEMat3dValuator):
     theta: Optional[float] = field(default=None, metadata={'fe_name': 'theta'})
     phi: Optional[float] = field(default=None, metadata={'fe_name': 'phi'})
-    fe_class: str = 'angles'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='angles')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dSphericalMap(FEMat3dValuator):
     center: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'center'})
     vector: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'vector'})
-    fe_class: str = 'spherical'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='spherical')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
 
 @dataclass
 class FEMat3dVectorMap(FEMat3dValuator):
     a: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'a'})
     d: Optional[Vec3d] = field(default=None, metadata={'fe_name': 'd'})
-    fe_class: str = 'vector'
-    xml_tag: str = ''
-    xml_section: str = ''
+    fe_class: str = field(init=False, default='vector')
+    xml_tag: str = field(init=False, default='')
+    xml_section: str = field(init=False, default='')
