@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from ..common.base import Annotated, FEBioEntity, RangeSpec
+from interFEBio.common.base import Annotated, FEBioEntity, RangeSpec
 
 
 class FECoreBase(FEBioEntity):
@@ -64,12 +64,12 @@ class FEAnalysis(FECoreBase):
         OUTPUT_MUST_POINTS = 3
         OUTPUT_FINAL = 4
 
-    plot_range: int = field(metadata={'fe_name': 'plot_range'})
     analysis: int = field(default=0, metadata={'fe_name': 'analysis', 'default': 0})
     time_steps: Annotated[int, 'RangeSpec(min=-1, min_inclusive=True)'] = field(default=10, metadata={'fe_name': 'time_steps', 'range': {'min': -1, 'min_inclusive': True}, 'default': 10})
     step_size: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0.1, metadata={'fe_name': 'step_size', 'units': 'UNIT_TIME', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.1})
     final_time: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0.0, metadata={'fe_name': 'final_time', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.0})
     plot_zero_state: bool = field(default=False, metadata={'fe_name': 'plot_zero_state', 'default': False})
+    plot_range: tuple[int, int] = field(default=(0, -1), metadata={'fe_name': 'plot_range', 'default': [0, -1]})
     plot_level: PlotLevel | int = field(default=PlotLevel.PLOT_MAJOR_ITRS, metadata={'fe_name': 'plot_level', 'enum': ['PLOT_NEVER', 'PLOT_MAJOR_ITRS', 'PLOT_MINOR_ITRS', 'PLOT_MUST_POINTS', 'PLOT_FINAL', 'PLOT_AUGMENTATIONS', 'PLOT_STEP_FINAL'], 'enum_class': 'PlotLevel', 'default': 1})
     output_level: OutputLevel | int = field(default=OutputLevel.OUTPUT_MAJOR_ITRS, metadata={'fe_name': 'output_level', 'enum': ['OUTPUT_NEVER', 'OUTPUT_MAJOR_ITRS', 'OUTPUT_MINOR_ITRS', 'OUTPUT_MUST_POINTS', 'OUTPUT_FINAL'], 'enum_class': 'OutputLevel', 'default': 1})
     plot_stride: int = field(default=1, metadata={'fe_name': 'plot_stride', 'default': 1})

@@ -9,9 +9,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..common.base import FEBioEntity
-from ..common.regions import NodeSetRef, SurfaceRef, coerce_nodeset, coerce_surface
-from ..Core import Vec3d, mat3d
+from interFEBio.common.base import FEBioEntity
+from interFEBio.common.regions import (
+    NodeSetRef,
+    SurfaceRef,
+    coerce_nodeset,
+    coerce_surface,
+)
+from interFEBio.Core.Parameters import Vec3d, mat3d
 
 
 class FEBoundaryCondition(FEBioEntity):

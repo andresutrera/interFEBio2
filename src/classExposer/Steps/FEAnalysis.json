@@ -141,7 +141,10 @@
         "chain": [],
         "member": "m_nplotRange",
         "ctype": "int[2]",
-        "default": null,
+        "default": [
+          0,
+          -1
+        ],
         "strings": [
           "plot_range"
         ],

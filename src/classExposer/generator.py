@@ -48,10 +48,13 @@ CORE_HELPER_IDENTIFIERS: set[str] = {
 }
 
 
+ROOT_PACKAGE = "interFEBio"
+
+
 _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
     "Core": {
         "imports": (
-            "from .Parameters import (\n"
+            f"from {ROOT_PACKAGE}.Core.Parameters import (\n"
             "    FEParamDouble,\n"
             "    FEParamVec3,\n"
             "    FEParamMat3d,\n"
@@ -71,7 +74,6 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
             "FEParamVec3",
             "FEParamMat3d",
             "FEParamMat3ds",
-            "Parameters",
         ],
         "stub_exclude": {
             "Vec3d",
@@ -82,14 +84,13 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
             "FEParamVec3",
             "FEParamMat3d",
             "FEParamMat3ds",
-            "Parameters",
         },
         "skip_value_types": True,
     },
     "BoundaryConditions": {
         "imports": (
-            "from ..Core import Vec3d\n"
-            "from ..common.regions import NodeSetRef, SurfaceRef, coerce_nodeset, coerce_surface\n\n"
+            f"from {ROOT_PACKAGE}.Core.Parameters import Vec3d\n"
+            f"from {ROOT_PACKAGE}.common.regions import NodeSetRef, SurfaceRef, coerce_nodeset, coerce_surface\n\n"
         ),
         "exports": [
             "Vec3d",
@@ -134,8 +135,8 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
     },
     "Loads": {
         "imports": (
-            "from ..Core import Vec3d, FEParamVec3\n"
-            "from ..common.regions import (\n"
+            f"from {ROOT_PACKAGE}.Core.Parameters import Vec3d, FEParamVec3\n"
+            f"from {ROOT_PACKAGE}.common.regions import (\n"
             "    NodeSetRef,\n"
             "    SurfaceRef,\n"
             "    ElementSetRef,\n"
@@ -199,7 +200,7 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
     },
     "Contact": {
         "imports": (
-            "from ..common.regions import SurfaceRef, coerce_surface\n\n"
+            f"from {ROOT_PACKAGE}.common.regions import SurfaceRef, coerce_surface\n\n"
         ),
         "exports": ["SurfaceRef", "FEContactInterface"],
         "stub_exclude": {"SurfaceRef", "FEContactInterface"},
@@ -223,7 +224,7 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
     },
     "Constraints": {
         "imports": (
-            "from ..common.regions import SurfaceRef, coerce_surface\n\n"
+            f"from {ROOT_PACKAGE}.common.regions import SurfaceRef, coerce_surface\n\n"
         ),
         "exports": ["SurfaceRef", "FESurfaceConstraint", "FEPrescribedSurface"],
         "stub_exclude": {"SurfaceRef", "FESurfaceConstraint", "FEPrescribedSurface"},
@@ -249,6 +250,11 @@ _CATEGORY_INJECTIONS: dict[str, dict[str, Any]] = {
 CLASS_EXTENSIONS: dict[str, dict[str, Any]] = {}
 
 
+_ARRAY_CTYPE_PATTERN = re.compile(
+    r"(?P<base>[A-Za-z_][A-Za-z0-9_:]*)\s*\[\s*(?P<length>\d+)\s*\]"
+)
+
+
 def _normalise_cpp_class(ctype: str | None) -> str | None:
     """Return the canonical C++ class identifier extracted from ``ctype``."""
 
@@ -268,6 +274,22 @@ def _normalise_cpp_class(ctype: str | None) -> str | None:
         return None
     identifier = tokens[-1]
     return identifier.split("::")[-1]
+
+
+def _parse_array_ctype(ctype: str | None) -> tuple[str, int] | None:
+    if not ctype:
+        return None
+    match = _ARRAY_CTYPE_PATTERN.fullmatch(ctype.strip())
+    if not match:
+        return None
+    return match.group("base"), int(match.group("length"))
+
+
+def _format_array_type(base: str, length: int) -> str:
+    if length <= 0:
+        return "tuple[]"
+    repeated = ", ".join(base for _ in range(length))
+    return f"tuple[{repeated}]"
 
 
 def _map_primitive_type(ctype: str | None) -> str | None:
@@ -310,6 +332,16 @@ def _coerce_python_default(value: Any) -> Any:
 
     if value is None:
         return _DEFAULT_SENTINEL
+    if isinstance(value, (list, tuple)):
+        coerced: list[Any] = []
+        for item in value:
+            if isinstance(item, (int, float, bool)) or item is None:
+                coerced.append(item)
+            elif isinstance(item, str):
+                coerced.append(item)
+            else:
+                return _DEFAULT_SENTINEL
+        return tuple(coerced)
     if isinstance(value, (int, float, bool)):
         return value
     if isinstance(value, str):
@@ -747,6 +779,16 @@ class TypeResolver:
     def resolve_param_type(
         self, consumer_category: str | None, param: dict[str, Any]
     ) -> str:
+        array_info = _parse_array_ctype(param.get("ctype"))
+        if array_info:
+            base_cpp, length = array_info
+            primitive_base = _map_primitive_type(base_cpp)
+            if primitive_base:
+                base_python = primitive_base
+            else:
+                base_python = self.ensure_class(base_cpp)
+                self._record_dependency(consumer_category, base_python)
+            return _format_array_type(base_python, length)
         primitive = _map_primitive_type(param.get("ctype"))
         definitions = param.get("definition") or []
         candidates: list[str] = []
@@ -1025,7 +1067,9 @@ def _build_module_header(
     common_parts.append("FEBioEntity")
     if uses_range_spec:
         common_parts.append("RangeSpec")
-    lines.append(f"from ..common.base import {', '.join(common_parts)}")
+    lines.append(
+        f"from {ROOT_PACKAGE}.common.base import {', '.join(common_parts)}"
+    )
     return "\n".join(lines) + "\n\n"
 
 
@@ -1106,10 +1150,11 @@ def _render_module(
     if extra_imports:
         body_parts.append(extra_imports)
     existing_helpers: set[str] = set()
+    core_param_prefix = f"from {ROOT_PACKAGE}.Core.Parameters import"
     for block in filter(None, [import_block, extra_imports]):
         for line in block.splitlines():
             line = line.strip()
-            if line.startswith("from ..Core import"):
+            if line.startswith(core_param_prefix):
                 after = line.split("import", 1)[1]
                 for token in after.split(','):
                     name = token.strip()
@@ -1117,7 +1162,9 @@ def _render_module(
                         existing_helpers.add(name)
     pending_helpers = sorted(helper for helper in core_helpers if helper not in existing_helpers)
     if pending_helpers:
-        body_parts.append(f"from ..Core import {', '.join(pending_helpers)}\n")
+        body_parts.append(
+            f"from {ROOT_PACKAGE}.Core.Parameters import {', '.join(pending_helpers)}\n"
+        )
     if value_type_block:
         body_parts.append(value_type_block)
     if stub_block:
@@ -1282,9 +1329,9 @@ def _render_dependency_imports(resolver: TypeResolver, category: str | None) -> 
         dependency_category = resolver.category_for(python_name)
         if not dependency_category or dependency_category == category:
             continue
-        lines.append(
-            f"from ..{_sanitise_category(dependency_category)} import {python_name}"
-        )
+        safe = _sanitise_category(dependency_category)
+        module_path = f"{ROOT_PACKAGE}.{safe}.Generated_{safe}_automatic"
+        lines.append(f"from {module_path} import {python_name}")
     return "\n".join(lines) + ("\n" if lines else "")
 
 

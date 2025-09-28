@@ -8,8 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..common.base import FEBioEntity
-from ..common.regions import SurfaceRef, coerce_surface
+from interFEBio.common.base import FEBioEntity
+from interFEBio.common.regions import SurfaceRef, coerce_surface
 
 
 @dataclass(kw_only=True)

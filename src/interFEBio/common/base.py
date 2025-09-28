@@ -113,6 +113,23 @@ def describe_range(spec: Any) -> str:
     return " and ".join(parts) if parts else "specified range"
 
 
+def _format_field_value(value: Any) -> str:
+    """Serialise field values for XML output."""
+
+    if isinstance(value, Enum):
+        value = value.value
+    if isinstance(value, (list, tuple)):
+        parts: list[str] = []
+        for item in value:
+            if item is None:
+                continue
+            if isinstance(item, Enum):
+                item = item.value
+            parts.append(str(item))
+        return ", ".join(parts)
+    return str(value)
+
+
 def validate_range(owner: str, field_name: str, value: Any, spec: Any) -> None:
     """Validate ``value`` against ``spec`` and raise ``ValueError`` on failure."""
     if spec is None or isinstance(spec, str) or value is None:
@@ -179,9 +196,7 @@ class FEBioEntity:
                 self._append_property_element(element, param_name, value)
                 continue
             param_element = ET.SubElement(element, param_name)
-            if isinstance(value, Enum):
-                value = value.value
-            param_element.text = str(value)
+            param_element.text = _format_field_value(value)
         return element
 
     def _append_property_element(self, parent: ET.Element, tag: str, value: Any) -> None:
@@ -195,10 +210,8 @@ class FEBioEntity:
                     continue
                 self._append_property_element(parent, tag, item)
             return
-        if isinstance(value, Enum):
-            value = value.value
         prop_element = ET.SubElement(parent, tag)
-        prop_element.text = str(value)
+        prop_element.text = _format_field_value(value)
 
     def __setattr__(self, name: str, value: Any) -> None:
         field_info = getattr(self, "__dataclass_fields__", {}).get(name)

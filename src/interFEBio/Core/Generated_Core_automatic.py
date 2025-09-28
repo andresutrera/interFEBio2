@@ -7,9 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..common.base import FEBioEntity
-from ..Core import Vec3d, mat3d, mat3ds
-from .Parameters import (
+from interFEBio.common.base import FEBioEntity
+from interFEBio.Core.Parameters import (
     Vec3d,
     mat3d,
     mat3ds,
@@ -89,7 +88,7 @@ class FEMat3dCylindricalMap(FEMat3dValuator):
 
 @dataclass(kw_only=True)
 class FEMat3dLocalElementMap(FEMat3dValuator):
-    local: int = field(metadata={'fe_name': 'local'})
+    local: tuple[int, int, int] = field(metadata={'fe_name': 'local'})
     fe_class: str = field(init=False, default='local')
     xml_tag: str = field(init=False, default='')
 

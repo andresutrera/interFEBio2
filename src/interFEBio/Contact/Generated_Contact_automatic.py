@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from ..common.base import FEBioEntity
-from ..common.regions import SurfaceRef, coerce_surface
+from interFEBio.common.base import FEBioEntity
+from interFEBio.common.regions import SurfaceRef, coerce_surface
 
 
 @dataclass(kw_only=True)

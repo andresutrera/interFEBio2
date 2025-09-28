@@ -720,6 +720,20 @@ def _parse_body_defaults(body: str) -> dict[str, int | float | str | bool]:
     """Extract simple member assignments from a constructor body."""
 
     defaults: dict[str, int | float | str | bool] = {}
+    array_assign = re.compile(r"(m_[A-Za-z0-9_]+)\s*\[\s*(\d+)\s*\]\s*=\s*([^;]+);")
+    array_values: dict[str, dict[int, int | float | str | bool]] = {}
+    for match in array_assign.finditer(body):
+        name, index_text, rhs = match.groups()
+        rhs = rhs.strip()
+        if not rhs:
+            continue
+        if "," in rhs or "(" in rhs or ")" in rhs or "{" in rhs or "}" in rhs:
+            value = rhs
+        else:
+            value = _parse_literal_value(rhs)
+        array_values.setdefault(name, {})[int(index_text)] = value
+    body = array_assign.sub("", body)
+
     assignment = re.compile(r"((?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)+)([^;]+);")
     for match in assignment.finditer(body):
         targets_blob, rhs = match.groups()
@@ -735,6 +749,14 @@ def _parse_body_defaults(body: str) -> dict[str, int | float | str | bool]:
             if not target.startswith("m_"):
                 continue
             defaults[target] = value
+    for name, mapping in array_values.items():
+        if not mapping:
+            continue
+        max_index = max(mapping)
+        values: list[int | float | str | bool | None] = []
+        for idx in range(max_index + 1):
+            values.append(mapping.get(idx))
+        defaults[name] = tuple(values)
     return defaults
 
 

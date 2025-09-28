@@ -1,0 +1,400 @@
+[
+  {
+    "class": "FEUncoupledViscoElasticMaterial",
+    "base": "FEUncoupledMaterial",
+    "registration": "uncoupled viscoelastic",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[0]",
+          "\"t1\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[0]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t1"
+        ],
+        "range": null,
+        "name": "t1",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[1]",
+          "\"t2\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[1]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t2"
+        ],
+        "range": null,
+        "name": "t2",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[2]",
+          "\"t3\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[2]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t3"
+        ],
+        "range": null,
+        "name": "t3",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[3]",
+          "\"t4\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[3]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t4"
+        ],
+        "range": null,
+        "name": "t4",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[4]",
+          "\"t5\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[4]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t5"
+        ],
+        "range": null,
+        "name": "t5",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_t[5]",
+          "\"t6\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          }
+        ],
+        "member": "m_t[5]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "t6"
+        ],
+        "range": null,
+        "name": "t6",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g0",
+          "\"g0\""
+        ],
+        "chain": [],
+        "member": "m_g0",
+        "ctype": "double",
+        "default": 1,
+        "strings": [
+          "g0"
+        ],
+        "range": null,
+        "name": "g0",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[0]",
+          "\"g1\""
+        ],
+        "chain": [],
+        "member": "m_g[0]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g1"
+        ],
+        "range": null,
+        "name": "g1",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[1]",
+          "\"g2\""
+        ],
+        "chain": [],
+        "member": "m_g[1]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g2"
+        ],
+        "range": null,
+        "name": "g2",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[2]",
+          "\"g3\""
+        ],
+        "chain": [],
+        "member": "m_g[2]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g3"
+        ],
+        "range": null,
+        "name": "g3",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[3]",
+          "\"g4\""
+        ],
+        "chain": [],
+        "member": "m_g[3]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g4"
+        ],
+        "range": null,
+        "name": "g4",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[4]",
+          "\"g5\""
+        ],
+        "chain": [],
+        "member": "m_g[4]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g5"
+        ],
+        "range": null,
+        "name": "g5",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_g[5]",
+          "\"g6\""
+        ],
+        "chain": [],
+        "member": "m_g[5]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "g6"
+        ],
+        "range": null,
+        "name": "g6",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_pBase",
+          "\"elastic\""
+        ],
+        "chain": [],
+        "member": "m_pBase",
+        "ctype": "FEUncoupledMaterial *",
+        "default": null,
+        "strings": [
+          "elastic"
+        ],
+        "range": null,
+        "name": "elastic",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEUncoupledMaterial",
+            "base": "FEElasticMaterial",
+            "registration": null,
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_K",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"k\""
+                ],
+                "chain": [
+                  {
+                    "func": "setUnits",
+                    "args": [
+                      "UNIT_PRESSURE"
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  },
+                  {
+                    "func": "setLongName",
+                    "args": [
+                      "\"bulk modulus\""
+                    ]
+                  }
+                ],
+                "member": "m_K",
+                "ctype": "double",
+                "default": 0,
+                "strings": [
+                  "k"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "k",
+                "enum": null,
+                "long_name": "bulk modulus",
+                "units": "UNIT_PRESSURE"
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_npmodel",
+                  "\"pressure_model\""
+                ],
+                "chain": [
+                  {
+                    "func": "setEnums",
+                    "args": [
+                      "\"default\\0NIKE3D\\0Abaqus\\0Abaqus (GOH)\\0\""
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  }
+                ],
+                "member": "m_npmodel",
+                "ctype": "int",
+                "default": 0,
+                "strings": [
+                  "pressure_model"
+                ],
+                "range": null,
+                "name": "pressure_model",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

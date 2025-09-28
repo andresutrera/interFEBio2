@@ -8,8 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..common.base import FEBioEntity
-from ..common.regions import (
+from interFEBio.common.base import FEBioEntity
+from interFEBio.common.regions import (
     ElementSetRef,
     NodeSetRef,
     SurfaceRef,
@@ -17,7 +17,7 @@ from ..common.regions import (
     coerce_nodeset,
     coerce_surface,
 )
-from ..Core import FEParamVec3, Vec3d
+from interFEBio.Core.Parameters import FEParamVec3, Vec3d
 
 
 class FEModelLoad(FEBioEntity):

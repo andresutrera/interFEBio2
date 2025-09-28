@@ -8,8 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..common.base import Annotated, FEBioEntity, RangeSpec
-from ..Core import (
+from interFEBio.common.base import Annotated, FEBioEntity, RangeSpec
+from interFEBio.Core.Generated_Core_automatic import (
     FEConstFunction,
     FEConstValueMat3d,
     FELinearFunction,
@@ -20,9 +20,9 @@ from ..Core import (
     FEMat3dSphericalMap,
     FEMat3dVectorMap,
     FEMathFunction,
-    FEParamMat3d,
     FEStepFunction,
 )
+from interFEBio.Core.Parameters import FEParamMat3d
 
 
 class FEDamageCriterion(FEBioEntity):
@@ -57,6 +57,7 @@ __all__ = [
     'FEIsotropicElastic',
     'FEPreStrainUncoupledElastic',
     'FEPrestrainElastic',
+    'FEUncoupledViscoElasticMaterial',
     'FEYeoh',
 ]
 
@@ -176,6 +177,25 @@ class FEPrestrainElastic(FEElasticMaterial):
     elastic: FEElasticMaterial = field(metadata={'fe_name': 'elastic', 'is_property': True})
     prestrain: FEPrestrainGradient = field(metadata={'fe_name': 'prestrain', 'is_property': True})
     fe_class: str = field(init=False, default='prestrain elastic')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEUncoupledViscoElasticMaterial(FEUncoupledMaterial):
+    t1: Any = field(metadata={'fe_name': 't1', 'units': 'UNIT_TIME'})
+    t2: Any = field(metadata={'fe_name': 't2', 'units': 'UNIT_TIME'})
+    t3: Any = field(metadata={'fe_name': 't3', 'units': 'UNIT_TIME'})
+    t4: Any = field(metadata={'fe_name': 't4', 'units': 'UNIT_TIME'})
+    t5: Any = field(metadata={'fe_name': 't5', 'units': 'UNIT_TIME'})
+    t6: Any = field(metadata={'fe_name': 't6', 'units': 'UNIT_TIME'})
+    g1: Any = field(metadata={'fe_name': 'g1'})
+    g2: Any = field(metadata={'fe_name': 'g2'})
+    g3: Any = field(metadata={'fe_name': 'g3'})
+    g4: Any = field(metadata={'fe_name': 'g4'})
+    g5: Any = field(metadata={'fe_name': 'g5'})
+    g6: Any = field(metadata={'fe_name': 'g6'})
+    elastic: FEUncoupledMaterial = field(metadata={'fe_name': 'elastic', 'is_property': True})
+    g0: float = field(default=1, metadata={'fe_name': 'g0', 'default': 1})
+    fe_class: str = field(init=False, default='uncoupled viscoelastic')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)

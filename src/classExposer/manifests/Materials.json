@@ -104,6 +104,12 @@
       "xml_tag": "material"
     },
     {
+      "class": "FEUncoupledViscoElasticMaterial",
+      "python_name": "FEUncoupledViscoElasticMaterial",
+      "header": "FEBioMech/FEUncoupledViscoElasticMaterial.h",
+      "xml_tag": "material"
+    },
+    {
       "class": "FEYeoh",
       "python_name": "FEYeoh",
       "header": "FEBioMech/FEYeoh.h",
