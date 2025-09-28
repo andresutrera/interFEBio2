@@ -6,6 +6,7 @@ __all__ = [
     'Core',
     'Loads',
     'Materials',
+    'Steps',
 ]
 
 from .BoundaryConditions import *  # noqa: F401,F403
@@ -14,3 +15,4 @@ from .Contact import *  # noqa: F401,F403
 from .Core import *  # noqa: F401,F403
 from .Loads import *  # noqa: F401,F403
 from .Materials import *  # noqa: F401,F403
+from .Steps import *  # noqa: F401,F403
