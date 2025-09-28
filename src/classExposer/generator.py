@@ -292,6 +292,13 @@ def _format_array_type(base: str, length: int) -> str:
     return f"tuple[{repeated}]"
 
 
+def _format_metadata_default(value: Any) -> Any:
+    if isinstance(value, (list, tuple)):
+        parts = [str(item) for item in value if item is not None]
+        return ", ".join(parts)
+    return value
+
+
 def _map_primitive_type(ctype: str | None) -> str | None:
     """Return primitive Python type match for ``ctype`` when available."""
 
@@ -653,7 +660,10 @@ class ParameterDefinition:
     def render(self) -> str:
         """Render the parameter as a dataclass field definition."""
 
-        metadata_repr = repr(self.metadata)
+        meta_for_render = dict(self.metadata)
+        if "default" in meta_for_render:
+            meta_for_render["default"] = _format_metadata_default(meta_for_render["default"])
+        metadata_repr = repr(meta_for_render)
         type_expression = self.type_expression()
         if self.default_expr is not None:
             default_repr = self.default_expr
@@ -986,20 +996,20 @@ class ClassRenderer:
                 if matched is not None:
                     coerced_default = matched.value
                     default_expr = f"{enum_class_name}.{matched.name}"
-                    meta["default"] = matched.value
+                    meta["default"] = _format_metadata_default(matched.value)
                 elif raw_default is not None:
-                    meta["default"] = raw_default
+                    meta["default"] = _format_metadata_default(raw_default)
                 elif coerced_default is not _DEFAULT_SENTINEL:
-                    meta["default"] = coerced_default
+                    meta["default"] = _format_metadata_default(coerced_default)
                 elif not allow_none and enum_members:
                     coerced_default = enum_members[0].value
                     default_expr = f"{enum_class_name}.{enum_members[0].name}"
-                    meta["default"] = enum_members[0].value
+                    meta["default"] = _format_metadata_default(enum_members[0].value)
             else:
                 if raw_default is not None:
-                    meta["default"] = raw_default
+                    meta["default"] = _format_metadata_default(raw_default)
                 elif coerced_default is not _DEFAULT_SENTINEL:
-                    meta["default"] = coerced_default
+                    meta["default"] = _format_metadata_default(coerced_default)
 
             annotation_payload = _build_range_annotation_payload(range_spec)
             if annotation_payload and python_type in {"int", "float"}:
