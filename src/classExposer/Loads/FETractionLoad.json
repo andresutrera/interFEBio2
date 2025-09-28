@@ -1,0 +1,99 @@
+[
+  {
+    "class": "FETractionLoad",
+    "base": "FESurfaceLoad",
+    "registration": "traction",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"scale\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_ADDLC | FE_PARAM_VOLATILE"
+            ]
+          }
+        ],
+        "member": "m_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "scale"
+        ],
+        "range": null,
+        "name": "scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_traction",
+          "\"traction\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "m_traction",
+        "ctype": "FEParamVec3",
+        "default": null,
+        "strings": [
+          "traction"
+        ],
+        "range": null,
+        "name": "traction",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellb",
+          "\"shell_bottom\""
+        ],
+        "chain": [],
+        "member": "m_bshellb",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "shell_bottom"
+        ],
+        "range": null,
+        "name": "shell_bottom",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_blinear",
+          "\"linear\""
+        ],
+        "chain": [],
+        "member": "m_blinear",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "linear"
+        ],
+        "range": null,
+        "name": "linear",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "class": "FEBCRigidDeformation",
+    "base": "FEPrescribedNodeSet",
+    "registration": "rigid deformation",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_rt",
+          "\"pos\""
+        ],
+        "chain": [],
+        "member": "m_rt",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "pos"
+        ],
+        "range": null,
+        "name": "pos",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_qt",
+          "\"rot\""
+        ],
+        "chain": [],
+        "member": "m_qt",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "rot"
+        ],
+        "range": null,
+        "name": "rot",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

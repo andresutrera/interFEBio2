@@ -1,0 +1,658 @@
+[
+  {
+    "class": "FEFungOrthotropic",
+    "base": "FEUncoupledMaterial",
+    "registration": "Fung orthotropic",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "E1",
+          "FE_RANGE_GREATER(0.0)",
+          "\"E1\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "E1",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "E1"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "E1",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "E2",
+          "FE_RANGE_GREATER(0.0)",
+          "\"E2\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "E2",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "E2"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "E2",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "E3",
+          "FE_RANGE_GREATER(0.0)",
+          "\"E3\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "E3",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "E3"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "E3",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "G12",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"G12\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "G12",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "G12"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "G12",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "G23",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"G23\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "G23",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "G23"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "G23",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "G31",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"G31\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "G31",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "G31"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "G31",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "v12",
+          "\"v12\""
+        ],
+        "chain": [],
+        "member": "v12",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "v12"
+        ],
+        "range": null,
+        "name": "v12",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "v23",
+          "\"v23\""
+        ],
+        "chain": [],
+        "member": "v23",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "v23"
+        ],
+        "range": null,
+        "name": "v23",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "v31",
+          "\"v31\""
+        ],
+        "chain": [],
+        "member": "v31",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "v31"
+        ],
+        "range": null,
+        "name": "v31",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_c",
+          "FE_RANGE_GREATER(0.0)",
+          "\"c\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          }
+        ],
+        "member": "m_c",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "c"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "c",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_Q",
+          "\"mat_axis\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FEProperty::Optional"
+            ]
+          }
+        ],
+        "member": "m_Q",
+        "ctype": "FEMat3dValuator *",
+        "default": null,
+        "strings": [
+          "mat_axis"
+        ],
+        "range": null,
+        "name": "mat_axis",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEConstValueMat3d",
+            "base": "FEMat3dValuator",
+            "registration": "const",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_val",
+                  "\"const\""
+                ],
+                "chain": [],
+                "member": "m_val",
+                "ctype": "mat3d",
+                "default": null,
+                "strings": [
+                  "const"
+                ],
+                "range": null,
+                "name": "const",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMat3dLocalElementMap",
+            "base": "FEMat3dValuator",
+            "registration": "local",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_n",
+                  "3",
+                  "\"local\""
+                ],
+                "chain": [],
+                "member": "m_n",
+                "ctype": "int[3]",
+                "default": null,
+                "strings": [
+                  "local"
+                ],
+                "range": null,
+                "name": "local",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMat3dSphericalMap",
+            "base": "FEMat3dValuator",
+            "registration": "spherical",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_c",
+                  "\"center\""
+                ],
+                "chain": [],
+                "member": "m_c",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "center"
+                ],
+                "range": null,
+                "name": "center",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_r",
+                  "\"vector\""
+                ],
+                "chain": [],
+                "member": "m_r",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "vector"
+                ],
+                "range": null,
+                "name": "vector",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMat3dCylindricalMap",
+            "base": "FEMat3dValuator",
+            "registration": "cylindrical",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_c",
+                  "\"center\""
+                ],
+                "chain": [],
+                "member": "m_c",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "center"
+                ],
+                "range": null,
+                "name": "center",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_a",
+                  "\"axis\""
+                ],
+                "chain": [],
+                "member": "m_a",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "axis"
+                ],
+                "range": null,
+                "name": "axis",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_r",
+                  "\"vector\""
+                ],
+                "chain": [],
+                "member": "m_r",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "vector"
+                ],
+                "range": null,
+                "name": "vector",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMat3dPolarMap",
+            "base": "FEMat3dValuator",
+            "registration": "polar",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_c",
+                  "\"center\""
+                ],
+                "chain": [],
+                "member": "m_c",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "center"
+                ],
+                "range": null,
+                "name": "center",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_a",
+                  "\"axis\""
+                ],
+                "chain": [],
+                "member": "m_a",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "axis"
+                ],
+                "range": null,
+                "name": "axis",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_d0",
+                  "\"vector1\""
+                ],
+                "chain": [],
+                "member": "m_d0",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "vector1"
+                ],
+                "range": null,
+                "name": "vector1",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_d1",
+                  "\"vector2\""
+                ],
+                "chain": [],
+                "member": "m_d1",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "vector2"
+                ],
+                "range": null,
+                "name": "vector2",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_R0",
+                  "\"radius1\""
+                ],
+                "chain": [],
+                "member": "m_R0",
+                "ctype": "double",
+                "default": null,
+                "strings": [
+                  "radius1"
+                ],
+                "range": null,
+                "name": "radius1",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_R1",
+                  "\"radius2\""
+                ],
+                "chain": [],
+                "member": "m_R1",
+                "ctype": "double",
+                "default": null,
+                "strings": [
+                  "radius2"
+                ],
+                "range": null,
+                "name": "radius2",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMat3dVectorMap",
+            "base": "FEMat3dValuator",
+            "registration": "vector",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_a",
+                  "\"a\""
+                ],
+                "chain": [],
+                "member": "m_a",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "a"
+                ],
+                "range": null,
+                "name": "a",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_d",
+                  "\"d\""
+                ],
+                "chain": [],
+                "member": "m_d",
+                "ctype": "vec3d",
+                "default": null,
+                "strings": [
+                  "d"
+                ],
+                "range": null,
+                "name": "d",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEMappedValueMat3d",
+            "base": "FEMat3dValuator",
+            "registration": "map",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mapName",
+                  "\"map\""
+                ],
+                "chain": [],
+                "member": "m_mapName",
+                "ctype": "std::string",
+                "default": null,
+                "strings": [
+                  "map"
+                ],
+                "range": null,
+                "name": "map",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

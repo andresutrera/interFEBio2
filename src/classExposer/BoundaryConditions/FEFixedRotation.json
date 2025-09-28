@@ -1,0 +1,87 @@
+[
+  {
+    "class": "FEFixedRotation",
+    "base": "FEFixedBC",
+    "registration": "zero rotation",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof[0]",
+          "\"u_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"x-rotation\""
+            ]
+          }
+        ],
+        "member": "m_dof[0]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "u_dof"
+        ],
+        "range": null,
+        "name": "u_dof",
+        "enum": null,
+        "long_name": "x-rotation",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof[1]",
+          "\"v_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"y-rotation\""
+            ]
+          }
+        ],
+        "member": "m_dof[1]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "v_dof"
+        ],
+        "range": null,
+        "name": "v_dof",
+        "enum": null,
+        "long_name": "y-rotation",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof[2]",
+          "\"w_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"z-rotation\""
+            ]
+          }
+        ],
+        "member": "m_dof[2]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "w_dof"
+        ],
+        "range": null,
+        "name": "w_dof",
+        "enum": null,
+        "long_name": "z-rotation",
+        "units": null
+      }
+    ]
+  }
+]

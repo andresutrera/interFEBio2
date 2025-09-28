@@ -1,0 +1,45 @@
+[
+  {
+    "class": "FEIncompNeoHookean",
+    "base": "FEUncoupledMaterial",
+    "registration": "incomp neo-Hookean",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_G",
+          "FE_RANGE_GREATER(0.0)",
+          "\"G\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          },
+          {
+            "func": "setLongName",
+            "args": [
+              "\"shear modulus\""
+            ]
+          }
+        ],
+        "member": "m_G",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "G"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "G",
+        "enum": null,
+        "long_name": "shear modulus",
+        "units": "UNIT_PRESSURE"
+      }
+    ]
+  }
+]

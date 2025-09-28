@@ -1,0 +1,77 @@
+[
+  {
+    "class": "FEIsotropicElastic",
+    "base": "FEElasticMaterial",
+    "registration": "isotropic elastic",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_E",
+          "FE_RANGE_GREATER(0.0)",
+          "\"E\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          },
+          {
+            "func": "setLongName",
+            "args": [
+              "\"Young's modulus\""
+            ]
+          }
+        ],
+        "member": "m_E",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "E"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": false
+        },
+        "name": "E",
+        "enum": null,
+        "long_name": "Young's modulus",
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_v",
+          "FE_RANGE_RIGHT_OPEN(-1.0, 0.5)",
+          "\"v\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"Poisson's ratio\""
+            ]
+          }
+        ],
+        "member": "m_v",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "v"
+        ],
+        "range": {
+          "min": -1.0,
+          "max": 0.5,
+          "min_inclusive": true,
+          "max_inclusive": false
+        },
+        "name": "v",
+        "enum": null,
+        "long_name": "Poisson's ratio",
+        "units": null
+      }
+    ]
+  }
+]

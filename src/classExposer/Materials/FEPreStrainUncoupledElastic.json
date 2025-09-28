@@ -1,0 +1,131 @@
+[
+  {
+    "class": "FEPreStrainUncoupledElastic",
+    "base": "FEUncoupledMaterial",
+    "registration": "uncoupled prestrain elastic",
+    "params": [
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_mat",
+          "\"elastic\""
+        ],
+        "chain": [],
+        "member": "m_mat",
+        "ctype": "FEUncoupledMaterial *",
+        "default": null,
+        "strings": [
+          "elastic"
+        ],
+        "range": null,
+        "name": "elastic",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEUncoupledMaterial",
+            "base": "FEElasticMaterial",
+            "registration": null,
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_K",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"k\""
+                ],
+                "chain": [
+                  {
+                    "func": "setUnits",
+                    "args": [
+                      "UNIT_PRESSURE"
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  },
+                  {
+                    "func": "setLongName",
+                    "args": [
+                      "\"bulk modulus\""
+                    ]
+                  }
+                ],
+                "member": "m_K",
+                "ctype": "double",
+                "default": null,
+                "strings": [
+                  "k"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "k",
+                "enum": null,
+                "long_name": "bulk modulus",
+                "units": "UNIT_PRESSURE"
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_npmodel",
+                  "\"pressure_model\""
+                ],
+                "chain": [
+                  {
+                    "func": "setEnums",
+                    "args": [
+                      "\"default\\0NIKE3D\\0Abaqus\\0Abaqus (GOH"
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  }
+                ],
+                "member": "m_npmodel",
+                "ctype": "int",
+                "default": null,
+                "strings": [
+                  "pressure_model"
+                ],
+                "range": null,
+                "name": "pressure_model",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_Fp",
+          "\"prestrain\"",
+          "false"
+        ],
+        "chain": [],
+        "member": "m_Fp",
+        "ctype": "FEPrestrainGradient *",
+        "default": null,
+        "strings": [
+          "prestrain"
+        ],
+        "range": null,
+        "name": "prestrain",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

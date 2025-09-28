@@ -1,0 +1,67 @@
+{
+  "Loads": [
+    {
+      "class": "FEBearingLoad",
+      "python_name": "FEBearingLoad",
+      "header": "FEBioMech/FEBearingLoad.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FECentrifugalBodyForce",
+      "python_name": "FECentrifugalBodyForce",
+      "header": "FEBioMech/FECentrifugalBodyForce.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FEConstBodyForceOld",
+      "python_name": "FEConstBodyForceOld",
+      "header": "FEBioMech/FEGenericBodyForce.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FEGenericBodyForce",
+      "python_name": "FEGenericBodyForce",
+      "header": "FEBioMech/FEGenericBodyForce.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FENodalForce",
+      "python_name": "FENodalForce",
+      "header": "FEBioMech/FENodalForce.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FENonConstBodyForceOld",
+      "python_name": "FENonConstBodyForceOld",
+      "header": "FEBioMech/FEGenericBodyForce.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FEPressureLoad",
+      "python_name": "FEPressureLoad",
+      "header": "FEBioMech/FEPressureLoad.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FESurfaceForceUniform",
+      "python_name": "FESurfaceForceUniform",
+      "header": "FEBioMech/FESurfaceForceUniform.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    },
+    {
+      "class": "FETractionLoad",
+      "python_name": "FETractionLoad",
+      "header": "FEBioMech/FETractionLoad.h",
+      "xml_section": "Loads",
+      "xml_tag": "load"
+    }
+  ]
+}

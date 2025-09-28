@@ -1,0 +1,11 @@
+{
+  "Contact": [
+    {
+      "class": "FESlidingElasticInterface",
+      "python_name": "FESlidingElasticInterface",
+      "header": "FEBioMech/FESlidingElasticInterface.h",
+      "xml_section": "Contact",
+      "xml_tag": "material"
+    }
+  ]
+}

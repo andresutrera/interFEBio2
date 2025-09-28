@@ -1,0 +1,66 @@
+[
+  {
+    "class": "FEPrescribedNormalDisplacement",
+    "base": "FEPrescribedSurface",
+    "registration": "normal displacement",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"scale\""
+        ],
+        "chain": [],
+        "member": "m_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "scale"
+        ],
+        "range": null,
+        "name": "scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_hint",
+          "\"surface_hint\""
+        ],
+        "chain": [],
+        "member": "m_hint",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "surface_hint"
+        ],
+        "range": null,
+        "name": "surface_hint",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_brelative",
+          "\"relative\""
+        ],
+        "chain": [],
+        "member": "m_brelative",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "relative"
+        ],
+        "range": null,
+        "name": "relative",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

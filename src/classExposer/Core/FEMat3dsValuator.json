@@ -1,0 +1,54 @@
+[
+  {
+    "class": "FEConstValueMat3ds",
+    "base": "FEMat3dsValuator",
+    "registration": "const",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_val",
+          "\"const\""
+        ],
+        "chain": [],
+        "member": "m_val",
+        "ctype": "mat3ds",
+        "default": null,
+        "strings": [
+          "const"
+        ],
+        "range": null,
+        "name": "const",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMappedValueMat3ds",
+    "base": "FEMat3dsValuator",
+    "registration": "map",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_mapName",
+          "\"map\""
+        ],
+        "chain": [],
+        "member": "m_mapName",
+        "ctype": "std::string",
+        "default": null,
+        "strings": [
+          "map"
+        ],
+        "range": null,
+        "name": "map",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

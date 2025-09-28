@@ -1,0 +1,356 @@
+[
+  {
+    "class": "FEConstValueMat3d",
+    "base": "FEMat3dValuator",
+    "registration": "const",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_val",
+          "\"const\""
+        ],
+        "chain": [],
+        "member": "m_val",
+        "ctype": "mat3d",
+        "default": null,
+        "strings": [
+          "const"
+        ],
+        "range": null,
+        "name": "const",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMat3dLocalElementMap",
+    "base": "FEMat3dValuator",
+    "registration": "local",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_n",
+          "3",
+          "\"local\""
+        ],
+        "chain": [],
+        "member": "m_n",
+        "ctype": "int[3]",
+        "default": null,
+        "strings": [
+          "local"
+        ],
+        "range": null,
+        "name": "local",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMat3dSphericalMap",
+    "base": "FEMat3dValuator",
+    "registration": "spherical",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_c",
+          "\"center\""
+        ],
+        "chain": [],
+        "member": "m_c",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "center"
+        ],
+        "range": null,
+        "name": "center",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_r",
+          "\"vector\""
+        ],
+        "chain": [],
+        "member": "m_r",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "vector"
+        ],
+        "range": null,
+        "name": "vector",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMat3dCylindricalMap",
+    "base": "FEMat3dValuator",
+    "registration": "cylindrical",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_c",
+          "\"center\""
+        ],
+        "chain": [],
+        "member": "m_c",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "center"
+        ],
+        "range": null,
+        "name": "center",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_a",
+          "\"axis\""
+        ],
+        "chain": [],
+        "member": "m_a",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "axis"
+        ],
+        "range": null,
+        "name": "axis",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_r",
+          "\"vector\""
+        ],
+        "chain": [],
+        "member": "m_r",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "vector"
+        ],
+        "range": null,
+        "name": "vector",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMat3dPolarMap",
+    "base": "FEMat3dValuator",
+    "registration": "polar",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_c",
+          "\"center\""
+        ],
+        "chain": [],
+        "member": "m_c",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "center"
+        ],
+        "range": null,
+        "name": "center",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_a",
+          "\"axis\""
+        ],
+        "chain": [],
+        "member": "m_a",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "axis"
+        ],
+        "range": null,
+        "name": "axis",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_d0",
+          "\"vector1\""
+        ],
+        "chain": [],
+        "member": "m_d0",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "vector1"
+        ],
+        "range": null,
+        "name": "vector1",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_d1",
+          "\"vector2\""
+        ],
+        "chain": [],
+        "member": "m_d1",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "vector2"
+        ],
+        "range": null,
+        "name": "vector2",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_R0",
+          "\"radius1\""
+        ],
+        "chain": [],
+        "member": "m_R0",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "radius1"
+        ],
+        "range": null,
+        "name": "radius1",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_R1",
+          "\"radius2\""
+        ],
+        "chain": [],
+        "member": "m_R1",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "radius2"
+        ],
+        "range": null,
+        "name": "radius2",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMat3dVectorMap",
+    "base": "FEMat3dValuator",
+    "registration": "vector",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_a",
+          "\"a\""
+        ],
+        "chain": [],
+        "member": "m_a",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "a"
+        ],
+        "range": null,
+        "name": "a",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_d",
+          "\"d\""
+        ],
+        "chain": [],
+        "member": "m_d",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "d"
+        ],
+        "range": null,
+        "name": "d",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMappedValueMat3d",
+    "base": "FEMat3dValuator",
+    "registration": "map",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_mapName",
+          "\"map\""
+        ],
+        "chain": [],
+        "member": "m_mapName",
+        "ctype": "std::string",
+        "default": null,
+        "strings": [
+          "map"
+        ],
+        "range": null,
+        "name": "map",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,93 @@
+[
+  {
+    "class": "FEBroydenStrategy",
+    "base": "FENewtonStrategy",
+    "registration": "Broyden",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_maxups",
+          "\"max_ups\""
+        ],
+        "chain": [],
+        "member": "m_maxups",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "max_ups"
+        ],
+        "range": null,
+        "name": "max_ups",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_max_buf_size",
+          "FE_RANGE_GREATER_OR_EQUAL(0)",
+          "\"max_buffer_size\""
+        ],
+        "chain": [],
+        "member": "m_max_buf_size",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "max_buffer_size"
+        ],
+        "range": {
+          "min": 0,
+          "min_inclusive": true
+        },
+        "name": "max_buffer_size",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_cycle_buffer",
+          "\"cycle_buffer\""
+        ],
+        "chain": [],
+        "member": "m_cycle_buffer",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "cycle_buffer"
+        ],
+        "range": null,
+        "name": "cycle_buffer",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_cmax",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"cmax\""
+        ],
+        "chain": [],
+        "member": "m_cmax",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "cmax"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "cmax",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

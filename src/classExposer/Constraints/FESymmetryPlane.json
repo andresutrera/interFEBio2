@@ -1,0 +1,123 @@
+[
+  {
+    "class": "FESymmetryPlane",
+    "base": "FESurfaceConstraint",
+    "registration": "symmetry plane",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_laugon",
+          "\"laugon\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_laugon",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "laugon"
+        ],
+        "range": null,
+        "name": "laugon",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_tol",
+          "\"tol\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_tol",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "tol"
+        ],
+        "range": null,
+        "name": "tol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_eps",
+          "\"penalty\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_eps",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "penalty"
+        ],
+        "range": null,
+        "name": "penalty",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_rhs",
+          "\"rhs\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_rhs",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "rhs"
+        ],
+        "range": null,
+        "name": "rhs",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_naugmin",
+          "\"minaug\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_naugmin",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "minaug"
+        ],
+        "range": null,
+        "name": "minaug",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lc.m_naugmax",
+          "\"maxaug\""
+        ],
+        "chain": [],
+        "member": "m_lc.m_naugmax",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "maxaug"
+        ],
+        "range": null,
+        "name": "maxaug",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

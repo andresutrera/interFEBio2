@@ -1,0 +1,47 @@
+[
+  {
+    "class": "FEMat3dSphericalAngleMap",
+    "base": "FEMat3dValuator",
+    "registration": "angles",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_theta",
+          "\"theta\""
+        ],
+        "chain": [],
+        "member": "m_theta",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "theta"
+        ],
+        "range": null,
+        "name": "theta",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_phi",
+          "\"phi\""
+        ],
+        "chain": [],
+        "member": "m_phi",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "phi"
+        ],
+        "range": null,
+        "name": "phi",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

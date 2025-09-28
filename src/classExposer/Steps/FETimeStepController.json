@@ -1,0 +1,170 @@
+[
+  {
+    "class": "FETimeStepController",
+    "base": "FEParamContainer",
+    "registration": "default",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_maxretries",
+          "\"max_retries\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"max retries\""
+            ]
+          }
+        ],
+        "member": "m_maxretries",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "max_retries"
+        ],
+        "range": null,
+        "name": "max_retries",
+        "enum": null,
+        "long_name": "max retries",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_iteopt",
+          "\"opt_iter\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"optimal iterations\""
+            ]
+          }
+        ],
+        "member": "m_iteopt",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "opt_iter"
+        ],
+        "range": null,
+        "name": "opt_iter",
+        "enum": null,
+        "long_name": "optimal iterations",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dtmin",
+          "\"dtmin\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"min stepsize\""
+            ]
+          }
+        ],
+        "member": "m_dtmin",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "dtmin"
+        ],
+        "range": null,
+        "name": "dtmin",
+        "enum": null,
+        "long_name": "min stepsize",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dtmax",
+          "\"dtmax\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"max stepsize\""
+            ]
+          }
+        ],
+        "member": "m_dtmax",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "dtmax"
+        ],
+        "range": null,
+        "name": "dtmax",
+        "enum": null,
+        "long_name": "max stepsize",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_naggr",
+          "\"aggressiveness\""
+        ],
+        "chain": [],
+        "member": "m_naggr",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "aggressiveness"
+        ],
+        "range": null,
+        "name": "aggressiveness",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_cutback",
+          "\"cutback\""
+        ],
+        "chain": [],
+        "member": "m_cutback",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "cutback"
+        ],
+        "range": null,
+        "name": "cutback",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dtforce",
+          "\"dtforce\""
+        ],
+        "chain": [],
+        "member": "m_dtforce",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "dtforce"
+        ],
+        "range": null,
+        "name": "dtforce",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

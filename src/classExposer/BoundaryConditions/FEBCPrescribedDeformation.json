@@ -1,0 +1,47 @@
+[
+  {
+    "class": "FEBCPrescribedDeformation",
+    "base": "FEPrescribedNodeSet",
+    "registration": "prescribed deformation",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"scale\""
+        ],
+        "chain": [],
+        "member": "m_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "scale"
+        ],
+        "range": null,
+        "name": "scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_F",
+          "\"F\""
+        ],
+        "chain": [],
+        "member": "m_F",
+        "ctype": "mat3d",
+        "default": null,
+        "strings": [
+          "F"
+        ],
+        "range": null,
+        "name": "F",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

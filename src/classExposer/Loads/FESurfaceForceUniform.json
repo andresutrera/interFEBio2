@@ -1,0 +1,86 @@
+[
+  {
+    "class": "FESurfaceForceUniform",
+    "base": "FESurfaceLoad",
+    "registration": "force",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"scale\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_ADDLC | FE_PARAM_VOLATILE"
+            ]
+          }
+        ],
+        "member": "m_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "scale"
+        ],
+        "range": null,
+        "name": "scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_force",
+          "\"force\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "0"
+            ]
+          },
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_FORCE"
+            ]
+          }
+        ],
+        "member": "m_force",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "force"
+        ],
+        "range": null,
+        "name": "force",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_FORCE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellb",
+          "\"shell_bottom\""
+        ],
+        "chain": [],
+        "member": "m_bshellb",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "shell_bottom"
+        ],
+        "range": null,
+        "name": "shell_bottom",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

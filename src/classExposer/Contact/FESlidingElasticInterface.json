@@ -1,0 +1,480 @@
+[
+  {
+    "class": "FESlidingElasticInterface",
+    "base": "FEContactInterface",
+    "registration": "sliding-elastic",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_laugon",
+          "\"laugon\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"Enforcement method\""
+            ]
+          },
+          {
+            "func": "setEnums",
+            "args": [
+              "\"PENALTY\\0AUGLAG\\0\""
+            ]
+          }
+        ],
+        "member": "m_laugon",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "laugon"
+        ],
+        "range": null,
+        "name": "laugon",
+        "enum": null,
+        "long_name": "Enforcement method",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_atol",
+          "\"tolerance\""
+        ],
+        "chain": [],
+        "member": "m_atol",
+        "ctype": "double",
+        "default": 0.1,
+        "strings": [
+          "tolerance"
+        ],
+        "range": null,
+        "name": "tolerance",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_gtol",
+          "\"gaptol\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_LENGTH"
+            ]
+          }
+        ],
+        "member": "m_gtol",
+        "ctype": "double",
+        "default": 0,
+        "strings": [
+          "gaptol"
+        ],
+        "range": null,
+        "name": "gaptol",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_LENGTH"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_epsn",
+          "\"penalty\""
+        ],
+        "chain": [],
+        "member": "m_epsn",
+        "ctype": "double",
+        "default": 1,
+        "strings": [
+          "penalty"
+        ],
+        "range": null,
+        "name": "penalty",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bautopen",
+          "\"auto_penalty\""
+        ],
+        "chain": [],
+        "member": "m_bautopen",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "auto_penalty"
+        ],
+        "range": null,
+        "name": "auto_penalty",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bupdtpen",
+          "\"update_penalty\""
+        ],
+        "chain": [],
+        "member": "m_bupdtpen",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "update_penalty"
+        ],
+        "range": null,
+        "name": "update_penalty",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_btwo_pass",
+          "\"two_pass\""
+        ],
+        "chain": [],
+        "member": "m_btwo_pass",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "two_pass"
+        ],
+        "range": null,
+        "name": "two_pass",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_knmult",
+          "\"knmult\""
+        ],
+        "chain": [],
+        "member": "m_knmult",
+        "ctype": "int",
+        "default": 0,
+        "strings": [
+          "knmult"
+        ],
+        "range": null,
+        "name": "knmult",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_stol",
+          "\"search_tol\""
+        ],
+        "chain": [],
+        "member": "m_stol",
+        "ctype": "double",
+        "default": 0.01,
+        "strings": [
+          "search_tol"
+        ],
+        "range": null,
+        "name": "search_tol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bsymm",
+          "\"symmetric_stiffness\""
+        ],
+        "chain": [],
+        "member": "m_bsymm",
+        "ctype": "bool",
+        "default": true,
+        "strings": [
+          "symmetric_stiffness"
+        ],
+        "range": null,
+        "name": "symmetric_stiffness",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_srad",
+          "\"search_radius\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_LENGTH"
+            ]
+          }
+        ],
+        "member": "m_srad",
+        "ctype": "double",
+        "default": 1.0,
+        "strings": [
+          "search_radius"
+        ],
+        "range": null,
+        "name": "search_radius",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_LENGTH"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_nsegup",
+          "\"seg_up\""
+        ],
+        "chain": [],
+        "member": "m_nsegup",
+        "ctype": "int",
+        "default": 0,
+        "strings": [
+          "seg_up"
+        ],
+        "range": null,
+        "name": "seg_up",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_btension",
+          "\"tension\""
+        ],
+        "chain": [],
+        "member": "m_btension",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "tension"
+        ],
+        "range": null,
+        "name": "tension",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_naugmin",
+          "\"minaug\""
+        ],
+        "chain": [],
+        "member": "m_naugmin",
+        "ctype": "int",
+        "default": 0,
+        "strings": [
+          "minaug"
+        ],
+        "range": null,
+        "name": "minaug",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_naugmax",
+          "\"maxaug\""
+        ],
+        "chain": [],
+        "member": "m_naugmax",
+        "ctype": "int",
+        "default": 10,
+        "strings": [
+          "maxaug"
+        ],
+        "range": null,
+        "name": "maxaug",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_breloc",
+          "\"node_reloc\""
+        ],
+        "chain": [],
+        "member": "m_breloc",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "node_reloc"
+        ],
+        "range": null,
+        "name": "node_reloc",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_mu",
+          "\"fric_coeff\""
+        ],
+        "chain": [],
+        "member": "m_mu",
+        "ctype": "double",
+        "default": 0.0,
+        "strings": [
+          "fric_coeff"
+        ],
+        "range": null,
+        "name": "fric_coeff",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bsmaug",
+          "\"smooth_aug\""
+        ],
+        "chain": [],
+        "member": "m_bsmaug",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "smooth_aug"
+        ],
+        "range": null,
+        "name": "smooth_aug",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bflips",
+          "\"flip_primary\""
+        ],
+        "chain": [],
+        "member": "m_bflips",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "flip_primary"
+        ],
+        "range": null,
+        "name": "flip_primary",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bflipm",
+          "\"flip_secondary\""
+        ],
+        "chain": [],
+        "member": "m_bflipm",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "flip_secondary"
+        ],
+        "range": null,
+        "name": "flip_secondary",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellbs",
+          "\"shell_bottom_primary\""
+        ],
+        "chain": [],
+        "member": "m_bshellbs",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "shell_bottom_primary"
+        ],
+        "range": null,
+        "name": "shell_bottom_primary",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellbm",
+          "\"shell_bottom_secondary\""
+        ],
+        "chain": [],
+        "member": "m_bshellbm",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "shell_bottom_secondary"
+        ],
+        "range": null,
+        "name": "shell_bottom_secondary",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_offset",
+          "\"offset\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_LENGTH"
+            ]
+          }
+        ],
+        "member": "m_offset",
+        "ctype": "double",
+        "default": 0,
+        "strings": [
+          "offset"
+        ],
+        "range": null,
+        "name": "offset",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_LENGTH"
+      }
+    ]
+  }
+]

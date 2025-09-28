@@ -1,0 +1,86 @@
+[
+  {
+    "class": "FEPrescribedDisplacement",
+    "base": "FENodalBC",
+    "registration": "prescribed displacement",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof",
+          "\"dof\"",
+          "0",
+          "\"$(dof_list:displacement)\""
+        ],
+        "chain": [],
+        "member": "m_dof",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "dof",
+          "$(dof_list:displacement)"
+        ],
+        "range": "$(dof_list:displacement)",
+        "name": "dof",
+        "enum": [
+          "x",
+          "y",
+          "z"
+        ],
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"value\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_LENGTH"
+            ]
+          },
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_ADDLC | FE_PARAM_VOLATILE"
+            ]
+          }
+        ],
+        "member": "m_scale",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "value"
+        ],
+        "range": null,
+        "name": "value",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_LENGTH"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_brelative",
+          "\"relative\""
+        ],
+        "chain": [],
+        "member": "m_brelative",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "relative"
+        ],
+        "range": null,
+        "name": "relative",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

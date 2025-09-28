@@ -1,0 +1,87 @@
+[
+  {
+    "class": "FEFixedDisplacement",
+    "base": "FEFixedBC",
+    "registration": "zero displacement",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dofx",
+          "\"x_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"x-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dofx",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "x_dof"
+        ],
+        "range": null,
+        "name": "x_dof",
+        "enum": null,
+        "long_name": "x-displacement",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dofy",
+          "\"y_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"y-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dofy",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "y_dof"
+        ],
+        "range": null,
+        "name": "y_dof",
+        "enum": null,
+        "long_name": "y-displacement",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dofz",
+          "\"z_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"z-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dofz",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "z_dof"
+        ],
+        "range": null,
+        "name": "z_dof",
+        "enum": null,
+        "long_name": "z-displacement",
+        "units": null
+      }
+    ]
+  }
+]

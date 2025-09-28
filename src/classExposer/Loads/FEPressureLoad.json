@@ -1,0 +1,98 @@
+[
+  {
+    "class": "FEPressureLoad",
+    "base": "FESurfaceLoad",
+    "registration": "pressure",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_pressure",
+          "\"pressure\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_PRESSURE"
+            ]
+          },
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_ADDLC | FE_PARAM_VOLATILE"
+            ]
+          }
+        ],
+        "member": "m_pressure",
+        "ctype": "FEParamDouble",
+        "default": null,
+        "strings": [
+          "pressure"
+        ],
+        "range": null,
+        "name": "pressure",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_PRESSURE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bsymm",
+          "\"symmetric_stiffness\""
+        ],
+        "chain": [],
+        "member": "m_bsymm",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "symmetric_stiffness"
+        ],
+        "range": null,
+        "name": "symmetric_stiffness",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_blinear",
+          "\"linear\""
+        ],
+        "chain": [],
+        "member": "m_blinear",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "linear"
+        ],
+        "range": null,
+        "name": "linear",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellb",
+          "\"shell_bottom\""
+        ],
+        "chain": [],
+        "member": "m_bshellb",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "shell_bottom"
+        ],
+        "range": null,
+        "name": "shell_bottom",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

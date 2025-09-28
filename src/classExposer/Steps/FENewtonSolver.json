@@ -1,0 +1,247 @@
+[
+  {
+    "class": "FENewtonSolver",
+    "base": "FESolver",
+    "registration": null,
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_maxref",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"max_refs\""
+        ],
+        "chain": [],
+        "member": "m_maxref",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "max_refs"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "max_refs",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bzero_diagonal",
+          "\"check_zero_diagonal\""
+        ],
+        "chain": [],
+        "member": "m_bzero_diagonal",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "check_zero_diagonal"
+        ],
+        "range": null,
+        "name": "check_zero_diagonal",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_zero_tol",
+          "\"zero_diagonal_tol\""
+        ],
+        "chain": [],
+        "member": "m_zero_tol",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "zero_diagonal_tol"
+        ],
+        "range": null,
+        "name": "zero_diagonal_tol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_force_partition",
+          "\"force_partition\""
+        ],
+        "chain": [],
+        "member": "m_force_partition",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "force_partition"
+        ],
+        "range": null,
+        "name": "force_partition",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_breformtimestep",
+          "\"reform_each_time_step\""
+        ],
+        "chain": [],
+        "member": "m_breformtimestep",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "reform_each_time_step"
+        ],
+        "range": null,
+        "name": "reform_each_time_step",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_breformAugment",
+          "\"reform_augment\""
+        ],
+        "chain": [],
+        "member": "m_breformAugment",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "reform_augment"
+        ],
+        "range": null,
+        "name": "reform_augment",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bdivreform",
+          "\"diverge_reform\""
+        ],
+        "chain": [],
+        "member": "m_bdivreform",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "diverge_reform"
+        ],
+        "range": null,
+        "name": "diverge_reform",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_Rmin",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"min_residual\""
+        ],
+        "chain": [],
+        "member": "m_Rmin",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "min_residual"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "min_residual",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_Rmax",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"max_residual\""
+        ],
+        "chain": [],
+        "member": "m_Rmax",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "max_residual"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "max_residual",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_qnstrategy",
+          "\"qn_method\"",
+          "FEProperty::Preferred"
+        ],
+        "chain": [
+          {
+            "func": "SetDefaultType",
+            "args": [
+              "\"BFGS\""
+            ]
+          }
+        ],
+        "member": "m_qnstrategy",
+        "ctype": "FENewtonStrategy *",
+        "default": null,
+        "strings": [
+          "qn_method"
+        ],
+        "range": null,
+        "name": "qn_method",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": []
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_plinsolve",
+          "\"linear_solver\"",
+          "FEProperty::Optional"
+        ],
+        "chain": [
+          {
+            "func": "SetDefaultType",
+            "args": [
+              "\"pardiso\""
+            ]
+          }
+        ],
+        "member": "m_plinsolve",
+        "ctype": "LinearSolver *",
+        "default": null,
+        "strings": [
+          "linear_solver"
+        ],
+        "range": null,
+        "name": "linear_solver",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

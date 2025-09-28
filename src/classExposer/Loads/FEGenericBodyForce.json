@@ -1,0 +1,163 @@
+[
+  {
+    "class": "FEGenericBodyForce",
+    "base": "FEBodyForce",
+    "registration": "body force",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_force",
+          "\"force\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_SPECIFIC_FORCE"
+            ]
+          }
+        ],
+        "member": "m_force",
+        "ctype": "FEParamVec3",
+        "default": null,
+        "strings": [
+          "force"
+        ],
+        "range": null,
+        "name": "force",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_SPECIFIC_FORCE"
+      }
+    ]
+  },
+  {
+    "class": "FEConstBodyForceOld",
+    "base": "FEBodyForce",
+    "registration": "const",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f.x",
+          "\"x\""
+        ],
+        "chain": [],
+        "member": "m_f.x",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "x"
+        ],
+        "range": null,
+        "name": "x",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f.y",
+          "\"y\""
+        ],
+        "chain": [],
+        "member": "m_f.y",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "y"
+        ],
+        "range": null,
+        "name": "y",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f.z",
+          "\"z\""
+        ],
+        "chain": [],
+        "member": "m_f.z",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "z"
+        ],
+        "range": null,
+        "name": "z",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FENonConstBodyForceOld",
+    "base": "FEBodyForce",
+    "registration": "non-const",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f[0]",
+          "\"x\""
+        ],
+        "chain": [],
+        "member": "m_f[0]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "x"
+        ],
+        "range": null,
+        "name": "x",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f[1]",
+          "\"y\""
+        ],
+        "chain": [],
+        "member": "m_f[1]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "y"
+        ],
+        "range": null,
+        "name": "y",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f[2]",
+          "\"z\""
+        ],
+        "chain": [],
+        "member": "m_f[2]",
+        "ctype": null,
+        "default": null,
+        "strings": [
+          "z"
+        ],
+        "range": null,
+        "name": "z",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

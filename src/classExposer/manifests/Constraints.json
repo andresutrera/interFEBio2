@@ -1,0 +1,18 @@
+{
+  "Constraints": [
+    {
+      "class": "FEPrescribedNormalDisplacement",
+      "python_name": "FEPrescribedNormalDisplacement",
+      "header": "FEBioMech/FEPrescribedNormalDisplacement.h",
+      "xml_section": "Constraints",
+      "xml_tag": "constraint"
+    },
+    {
+      "class": "FESymmetryPlane",
+      "python_name": "FESymmetryPlane",
+      "header": "FEBioMech/FESymmetryPlane.h",
+      "xml_section": "Constraints",
+      "xml_tag": "constraint"
+    }
+  ]
+}

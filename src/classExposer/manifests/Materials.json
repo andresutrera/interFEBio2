@@ -1,0 +1,114 @@
+{
+  "Materials": [
+    {
+      "class": "FEConstPrestrainGradient",
+      "python_name": "FEConstPrestrainGradient",
+      "header": "FEBioMech/FEConstPrestrain.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDF",
+      "python_name": "FEDamageCDF",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFGamma",
+      "python_name": "FEDamageCDFGamma",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFLogNormal",
+      "python_name": "FEDamageCDFLogNormal",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFPQP",
+      "python_name": "FEDamageCDFPQP",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFSimo",
+      "python_name": "FEDamageCDFSimo",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFStep",
+      "python_name": "FEDamageCDFStep",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFUser",
+      "python_name": "FEDamageCDFUser",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCDFWeibull",
+      "python_name": "FEDamageCDFWeibull",
+      "header": "FEBioMech/FEDamageCDF.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageCriterionDrucker",
+      "python_name": "FEDamageCriterionDrucker",
+      "header": "FEBioMech/FEDamageCriterion.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEDamageMaterialUC",
+      "python_name": "FEDamageMaterialUC",
+      "header": "FEBioMech/FEDamageMaterialUC.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEFungOrthotropic",
+      "python_name": "FEFungOrthotropic",
+      "header": "FEBioMech/FEFungOrthotropic.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEIncompNeoHookean",
+      "python_name": "FEIncompNeoHookean",
+      "header": "FEBioMech/FEIncompNeoHookean.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEIsotropicElastic",
+      "python_name": "FEIsotropicElastic",
+      "header": "FEBioMech/FEIsotropicElastic.h",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEPreStrainUncoupledElastic",
+      "python_name": "FEPreStrainUncoupledElastic",
+      "header": "FEBioMech/FEPreStrainUncoupledElastic.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEPrestrainElastic",
+      "python_name": "FEPrestrainElastic",
+      "header": "FEBioMech/FEPreStrainElastic.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    },
+    {
+      "class": "FEYeoh",
+      "python_name": "FEYeoh",
+      "header": "FEBioMech/FEYeoh.h",
+      "xml_section": "Materials",
+      "xml_tag": "material"
+    }
+  ]
+}

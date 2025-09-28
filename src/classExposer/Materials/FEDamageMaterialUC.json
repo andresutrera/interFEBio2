@@ -1,0 +1,718 @@
+[
+  {
+    "class": "FEDamageMaterialUC",
+    "base": "FEUncoupledMaterial",
+    "registration": "uncoupled elastic damage",
+    "params": [
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_pBase",
+          "\"elastic\""
+        ],
+        "chain": [],
+        "member": "m_pBase",
+        "ctype": "FEUncoupledMaterial *",
+        "default": null,
+        "strings": [
+          "elastic"
+        ],
+        "range": null,
+        "name": "elastic",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEUncoupledMaterial",
+            "base": "FEElasticMaterial",
+            "registration": null,
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_K",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"k\""
+                ],
+                "chain": [
+                  {
+                    "func": "setUnits",
+                    "args": [
+                      "UNIT_PRESSURE"
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  },
+                  {
+                    "func": "setLongName",
+                    "args": [
+                      "\"bulk modulus\""
+                    ]
+                  }
+                ],
+                "member": "m_K",
+                "ctype": "double",
+                "default": null,
+                "strings": [
+                  "k"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "k",
+                "enum": null,
+                "long_name": "bulk modulus",
+                "units": "UNIT_PRESSURE"
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_npmodel",
+                  "\"pressure_model\""
+                ],
+                "chain": [
+                  {
+                    "func": "setEnums",
+                    "args": [
+                      "\"default\\0NIKE3D\\0Abaqus\\0Abaqus (GOH"
+                    ]
+                  },
+                  {
+                    "func": "MakeTopLevel",
+                    "args": [
+                      "true"
+                    ]
+                  }
+                ],
+                "member": "m_npmodel",
+                "ctype": "int",
+                "default": null,
+                "strings": [
+                  "pressure_model"
+                ],
+                "range": null,
+                "name": "pressure_model",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_pDamg",
+          "\"damage\""
+        ],
+        "chain": [],
+        "member": "m_pDamg",
+        "ctype": "FEDamageCDF *",
+        "default": null,
+        "strings": [
+          "damage"
+        ],
+        "range": null,
+        "name": "damage",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEDamageCDF",
+            "base": "FEMaterialProperty",
+            "registration": null,
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_Dmax",
+                  "FE_RANGE_CLOSED(0.0, 1.0)",
+                  "\"Dmax\""
+                ],
+                "chain": [],
+                "member": "m_Dmax",
+                "ctype": "double",
+                "default": null,
+                "strings": [
+                  "Dmax"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "max": 1.0,
+                  "min_inclusive": true,
+                  "max_inclusive": true
+                },
+                "name": "Dmax",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFSimo",
+            "base": "FEDamageCDF",
+            "registration": "CDF Simo",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_alpha",
+                  "FE_RANGE_GREATER(0.0)",
+                  "\"a\""
+                ],
+                "chain": [],
+                "member": "m_alpha",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "a"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": false
+                },
+                "name": "a",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_beta",
+                  "FE_RANGE_CLOSED(0.0, 1.0)",
+                  "\"b\""
+                ],
+                "chain": [],
+                "member": "m_beta",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "b"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "max": 1.0,
+                  "min_inclusive": true,
+                  "max_inclusive": true
+                },
+                "name": "b",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFLogNormal",
+            "base": "FEDamageCDF",
+            "registration": "CDF log-normal",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mu",
+                  "FE_RANGE_GREATER(0.0)",
+                  "\"mu\""
+                ],
+                "chain": [],
+                "member": "m_mu",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mu"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": false
+                },
+                "name": "mu",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_sigma",
+                  "FE_RANGE_GREATER(0.0)",
+                  "\"sigma\""
+                ],
+                "chain": [],
+                "member": "m_sigma",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "sigma"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": false
+                },
+                "name": "sigma",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFWeibull",
+            "base": "FEDamageCDF",
+            "registration": "CDF Weibull",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_alpha",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"alpha\""
+                ],
+                "chain": [],
+                "member": "m_alpha",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "alpha"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "alpha",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mu",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"mu\""
+                ],
+                "chain": [],
+                "member": "m_mu",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mu"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "mu",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_ploc",
+                  "\"ploc\""
+                ],
+                "chain": [],
+                "member": "m_ploc",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "ploc"
+                ],
+                "range": null,
+                "name": "ploc",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFStep",
+            "base": "FEDamageCDF",
+            "registration": "CDF step",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mu",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"mu\""
+                ],
+                "chain": [],
+                "member": "m_mu",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mu"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "mu",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFPQP",
+            "base": "FEDamageCDF",
+            "registration": "CDF quintic",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mumin",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"mumin\""
+                ],
+                "chain": [],
+                "member": "m_mumin",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mumin"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "mumin",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mumax",
+                  "\"mumax\""
+                ],
+                "chain": [],
+                "member": "m_mumax",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mumax"
+                ],
+                "range": null,
+                "name": "mumax",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFGamma",
+            "base": "FEDamageCDF",
+            "registration": "CDF gamma",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_alpha",
+                  "FE_RANGE_GREATER(0)",
+                  "\"alpha\""
+                ],
+                "chain": [],
+                "member": "m_alpha",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "alpha"
+                ],
+                "range": {
+                  "min": 0,
+                  "min_inclusive": false
+                },
+                "name": "alpha",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              },
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_mu",
+                  "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+                  "\"mu\""
+                ],
+                "chain": [],
+                "member": "m_mu",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "mu"
+                ],
+                "range": {
+                  "min": 0.0,
+                  "min_inclusive": true
+                },
+                "name": "mu",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          },
+          {
+            "class": "FEDamageCDFUser",
+            "base": "FEDamageCDF",
+            "registration": "CDF user",
+            "params": [
+              {
+                "macro": "ADD_PROPERTY",
+                "args": [
+                  "m_cdf",
+                  "\"cdf\""
+                ],
+                "chain": [],
+                "member": "m_cdf",
+                "ctype": "FEFunction1D *",
+                "default": null,
+                "strings": [
+                  "cdf"
+                ],
+                "range": null,
+                "name": "cdf",
+                "enum": null,
+                "long_name": null,
+                "units": null,
+                "definition": [
+                  {
+                    "class": "FEConstFunction",
+                    "base": "FEFunction1D",
+                    "registration": "const",
+                    "params": [
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_value",
+                          "\"value\""
+                        ],
+                        "chain": [],
+                        "member": "m_value",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "value"
+                        ],
+                        "range": null,
+                        "name": "value",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      }
+                    ]
+                  },
+                  {
+                    "class": "FELinearFunction",
+                    "base": "FEFunction1D",
+                    "registration": "linear ramp",
+                    "params": [
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_slope",
+                          "\"slope\""
+                        ],
+                        "chain": [],
+                        "member": "m_slope",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "slope"
+                        ],
+                        "range": null,
+                        "name": "slope",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      },
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_intercept",
+                          "\"intercept\""
+                        ],
+                        "chain": [],
+                        "member": "m_intercept",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "intercept"
+                        ],
+                        "range": null,
+                        "name": "intercept",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      }
+                    ]
+                  },
+                  {
+                    "class": "FEStepFunction",
+                    "base": "FEFunction1D",
+                    "registration": "step",
+                    "params": [
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_x0",
+                          "\"x0\""
+                        ],
+                        "chain": [],
+                        "member": "m_x0",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "x0"
+                        ],
+                        "range": null,
+                        "name": "x0",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      },
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_leftVal",
+                          "\"left_val\""
+                        ],
+                        "chain": [],
+                        "member": "m_leftVal",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "left_val"
+                        ],
+                        "range": null,
+                        "name": "left_val",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      },
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_rightVal",
+                          "\"right_val\""
+                        ],
+                        "chain": [],
+                        "member": "m_rightVal",
+                        "ctype": "double",
+                        "default": null,
+                        "strings": [
+                          "right_val"
+                        ],
+                        "range": null,
+                        "name": "right_val",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      }
+                    ]
+                  },
+                  {
+                    "class": "FEMathFunction",
+                    "base": "FEFunction1D",
+                    "registration": "math",
+                    "params": [
+                      {
+                        "macro": "ADD_PARAMETER",
+                        "args": [
+                          "m_s",
+                          "\"math\""
+                        ],
+                        "chain": [],
+                        "member": "m_s",
+                        "ctype": "std::string",
+                        "default": null,
+                        "strings": [
+                          "math"
+                        ],
+                        "range": null,
+                        "name": "math",
+                        "enum": null,
+                        "long_name": null,
+                        "units": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_pCrit",
+          "\"criterion\""
+        ],
+        "chain": [],
+        "member": "m_pCrit",
+        "ctype": "FEDamageCriterion *",
+        "default": null,
+        "strings": [
+          "criterion"
+        ],
+        "range": null,
+        "name": "criterion",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEDamageCriterionDrucker",
+            "base": "FEDamageCriterion",
+            "registration": "DC Drucker shear stress",
+            "params": [
+              {
+                "macro": "ADD_PARAMETER",
+                "args": [
+                  "m_c",
+                  "FE_RANGE_CLOSED(-27.0/8.0,9.0/4.0)",
+                  "\"c\""
+                ],
+                "chain": [],
+                "member": "m_c",
+                "ctype": "FEParamDouble",
+                "default": null,
+                "strings": [
+                  "c"
+                ],
+                "range": {
+                  "min": "-27.0/8.0",
+                  "max": "9.0/4.0",
+                  "min_inclusive": true,
+                  "max_inclusive": true
+                },
+                "name": "c",
+                "enum": null,
+                "long_name": null,
+                "units": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

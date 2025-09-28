@@ -1,0 +1,60 @@
+[
+  {
+    "class": "FENodalForce",
+    "base": "FENodalLoad",
+    "registration": "nodal_force",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_f",
+          "\"value\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_FORCE"
+            ]
+          },
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_ADDLC | FE_PARAM_VOLATILE"
+            ]
+          }
+        ],
+        "member": "m_f",
+        "ctype": "FEParamVec3",
+        "default": null,
+        "strings": [
+          "value"
+        ],
+        "range": null,
+        "name": "value",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_FORCE"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_shellBottom",
+          "\"shell_bottom\""
+        ],
+        "chain": [],
+        "member": "m_shellBottom",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "shell_bottom"
+        ],
+        "range": null,
+        "name": "shell_bottom",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

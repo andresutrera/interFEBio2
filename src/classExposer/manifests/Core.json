@@ -1,0 +1,74 @@
+{
+  "Core": [
+    {
+      "class": "FEConstFunction",
+      "python_name": "FEConstFunction",
+      "header": "FECore/FEFunction1D.h"
+    },
+    {
+      "class": "FEConstValueMat3d",
+      "python_name": "FEConstValueMat3d",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEConstValueMat3ds",
+      "python_name": "FEConstValueMat3ds",
+      "header": "FECore/FEMat3dsValuator.h"
+    },
+    {
+      "class": "FELinearFunction",
+      "python_name": "FELinearFunction",
+      "header": "FECore/FEFunction1D.h"
+    },
+    {
+      "class": "FEMappedValueMat3d",
+      "python_name": "FEMappedValueMat3d",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMappedValueMat3ds",
+      "python_name": "FEMappedValueMat3ds",
+      "header": "FECore/FEMat3dsValuator.h"
+    },
+    {
+      "class": "FEMat3dCylindricalMap",
+      "python_name": "FEMat3dCylindricalMap",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMat3dLocalElementMap",
+      "python_name": "FEMat3dLocalElementMap",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMat3dPolarMap",
+      "python_name": "FEMat3dPolarMap",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMat3dSphericalAngleMap",
+      "python_name": "FEMat3dSphericalAngleMap",
+      "header": "FECore/FEMat3dSphericalAngleMap.h"
+    },
+    {
+      "class": "FEMat3dSphericalMap",
+      "python_name": "FEMat3dSphericalMap",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMat3dVectorMap",
+      "python_name": "FEMat3dVectorMap",
+      "header": "FECore/FEMat3dValuator.h"
+    },
+    {
+      "class": "FEMathFunction",
+      "python_name": "FEMathFunction",
+      "header": "FECore/FEFunction1D.h"
+    },
+    {
+      "class": "FEStepFunction",
+      "python_name": "FEStepFunction",
+      "header": "FECore/FEFunction1D.h"
+    }
+  ]
+}

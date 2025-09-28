@@ -1,0 +1,123 @@
+[
+  {
+    "class": "FEBearingLoad",
+    "base": "FESurfaceLoad",
+    "registration": "bearing load",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_scale",
+          "\"scale\""
+        ],
+        "chain": [],
+        "member": "m_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "scale"
+        ],
+        "range": null,
+        "name": "scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_force",
+          "\"force\""
+        ],
+        "chain": [],
+        "member": "m_force",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "force"
+        ],
+        "range": null,
+        "name": "force",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bsymm",
+          "\"symmetric_stiffness\""
+        ],
+        "chain": [],
+        "member": "m_bsymm",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "symmetric_stiffness"
+        ],
+        "range": null,
+        "name": "symmetric_stiffness",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_blinear",
+          "\"linear\""
+        ],
+        "chain": [],
+        "member": "m_blinear",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "linear"
+        ],
+        "range": null,
+        "name": "linear",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellb",
+          "\"shell_bottom\""
+        ],
+        "chain": [],
+        "member": "m_bshellb",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "shell_bottom"
+        ],
+        "range": null,
+        "name": "shell_bottom",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_profile",
+          "\"profile\""
+        ],
+        "chain": [],
+        "member": "m_profile",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "profile"
+        ],
+        "range": null,
+        "name": "profile",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

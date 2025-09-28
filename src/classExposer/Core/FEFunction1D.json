@@ -1,0 +1,163 @@
+[
+  {
+    "class": "FEConstFunction",
+    "base": "FEFunction1D",
+    "registration": "const",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_value",
+          "\"value\""
+        ],
+        "chain": [],
+        "member": "m_value",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "value"
+        ],
+        "range": null,
+        "name": "value",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FELinearFunction",
+    "base": "FEFunction1D",
+    "registration": "linear ramp",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_slope",
+          "\"slope\""
+        ],
+        "chain": [],
+        "member": "m_slope",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "slope"
+        ],
+        "range": null,
+        "name": "slope",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_intercept",
+          "\"intercept\""
+        ],
+        "chain": [],
+        "member": "m_intercept",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "intercept"
+        ],
+        "range": null,
+        "name": "intercept",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEStepFunction",
+    "base": "FEFunction1D",
+    "registration": "step",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_x0",
+          "\"x0\""
+        ],
+        "chain": [],
+        "member": "m_x0",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "x0"
+        ],
+        "range": null,
+        "name": "x0",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_leftVal",
+          "\"left_val\""
+        ],
+        "chain": [],
+        "member": "m_leftVal",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "left_val"
+        ],
+        "range": null,
+        "name": "left_val",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_rightVal",
+          "\"right_val\""
+        ],
+        "chain": [],
+        "member": "m_rightVal",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "right_val"
+        ],
+        "range": null,
+        "name": "right_val",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FEMathFunction",
+    "base": "FEFunction1D",
+    "registration": "math",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_s",
+          "\"math\""
+        ],
+        "chain": [],
+        "member": "m_s",
+        "ctype": "std::string",
+        "default": "0",
+        "strings": [
+          "math"
+        ],
+        "range": null,
+        "name": "math",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

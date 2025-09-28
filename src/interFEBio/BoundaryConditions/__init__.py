@@ -107,30 +107,29 @@ class FEFixedShellDisplacement(FEFixedBC):
 
 @dataclass(kw_only=True)
 class FELinearConstraint(FEBoundaryCondition):
-    offset: float = field(metadata={'fe_name': 'offset'})
     child_dof: int = field(metadata={'fe_name': 'child_dof', 'is_property': True})
+    offset: float = field(default=0.0, metadata={'fe_name': 'offset', 'default': 0.0})
     fe_class: str = field(init=False, default='linear constraint')
     xml_tag: str = field(init=False, default='bc')
 
 @dataclass(kw_only=True)
 class FELinearConstraintDOF(FECoreClass):
-    class Dof(Enum):
-        DOF_LIST = 0
-
+    dof: int = field(metadata={'fe_name': 'dof', 'range': '$(dof_list)', 'enum': '$(dof_list)'})
     node: int = field(metadata={'fe_name': 'node'})
     value: float = field(metadata={'fe_name': 'value'})
-    dof: Dof | int = field(default=Dof.DOF_LIST, metadata={'fe_name': 'dof', 'range': '$(dof_list)', 'enum': ['$(dof_list)'], 'enum_class': 'Dof', 'default': 0})
     fe_class: str = field(init=False, default='child_dof')
     xml_tag: str = field(init=False, default='bc')
 
 @dataclass(kw_only=True)
 class FEPrescribedDisplacement(FENodalBC):
     class Dof(Enum):
-        DOF_LIST_DISPLACEMENT = 0
+        X = 0
+        Y = 1
+        Z = 2
 
     value: float = field(metadata={'fe_name': 'value', 'units': 'UNIT_LENGTH'})
     relative: bool = field(metadata={'fe_name': 'relative'})
-    dof: Dof | int = field(default=Dof.DOF_LIST_DISPLACEMENT, metadata={'fe_name': 'dof', 'range': '$(dof_list:displacement)', 'enum': ['$(dof_list:displacement)'], 'enum_class': 'Dof', 'default': 0})
+    dof: Dof | int = field(default=Dof.X, metadata={'fe_name': 'dof', 'range': '$(dof_list:displacement)', 'enum': ['x', 'y', 'z'], 'enum_class': 'Dof', 'default': 0})
     fe_class: str = field(init=False, default='prescribed displacement')
     xml_tag: str = field(init=False, default='bc')
 
@@ -144,32 +143,23 @@ class FEPrescribedNormalDisplacement(FEPrescribedSurface):
 
 @dataclass(kw_only=True)
 class FEPrescribedRotation(FEBoundaryCondition):
-    class Dof(Enum):
-        DOF_LIST_ROTATION = 0
-
+    dof: int = field(metadata={'fe_name': 'dof', 'range': '$(dof_list:rotation)', 'enum': '$(dof_list:rotation)'})
     value: float = field(metadata={'fe_name': 'value', 'units': 'UNIT_RADIAN'})
     relative: bool = field(metadata={'fe_name': 'relative'})
-    dof: Dof | int = field(default=Dof.DOF_LIST_ROTATION, metadata={'fe_name': 'dof', 'range': '$(dof_list:rotation)', 'enum': ['$(dof_list:rotation)'], 'enum_class': 'Dof', 'default': 0})
     fe_class: str = field(init=False, default='prescribed rotation')
     xml_tag: str = field(init=False, default='bc')
 
 @dataclass(kw_only=True)
 class FEPrescribedShellDisplacement(FENodalBC):
-    class Dof(Enum):
-        DOF_LIST_SHELL_DISPLACEMENT = 0
-
+    dof: int = field(metadata={'fe_name': 'dof', 'range': '$(dof_list:shell displacement)', 'enum': '$(dof_list:shell displacement)'})
     value: float = field(metadata={'fe_name': 'value', 'units': 'UNIT_LENGTH'})
     relative: bool = field(metadata={'fe_name': 'relative'})
-    dof: Dof | int = field(default=Dof.DOF_LIST_SHELL_DISPLACEMENT, metadata={'fe_name': 'dof', 'range': '$(dof_list:shell displacement)', 'enum': ['$(dof_list:shell displacement)'], 'enum_class': 'Dof', 'default': 0})
     fe_class: str = field(init=False, default='prescribed shell displacement')
     xml_tag: str = field(init=False, default='bc')
 
 @dataclass(kw_only=True)
 class FERigidNodeSet(FENodalBC):
-    class Rb(Enum):
-        RIGID_MATERIALS = 0
-
-    clamp_shells: bool = field(metadata={'fe_name': 'clamp_shells'})
-    rb: Rb | int = field(default=Rb.RIGID_MATERIALS, metadata={'fe_name': 'rb', 'enum': ['"$(rigid_materials'], 'enum_class': 'Rb', 'default': 0})
+    rb: int = field(default=-1, metadata={'fe_name': 'rb', 'default': -1})
+    clamp_shells: bool = field(default=True, metadata={'fe_name': 'clamp_shells', 'default': True})
     fe_class: str = field(init=False, default='rigid')
     xml_tag: str = field(init=False, default='bc')

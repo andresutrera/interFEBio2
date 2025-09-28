@@ -1,0 +1,87 @@
+[
+  {
+    "class": "FEFixedShellDisplacement",
+    "base": "FEFixedBC",
+    "registration": "zero shell displacement",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof_sx",
+          "\"sx_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"sx-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dof_sx",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "sx_dof"
+        ],
+        "range": null,
+        "name": "sx_dof",
+        "enum": null,
+        "long_name": "sx-displacement",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof_sy",
+          "\"sy_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"sy-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dof_sy",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "sy_dof"
+        ],
+        "range": null,
+        "name": "sy_dof",
+        "enum": null,
+        "long_name": "sy-displacement",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dof_sz",
+          "\"sz_dof\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"sz-displacement\""
+            ]
+          }
+        ],
+        "member": "m_dof_sz",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "sz_dof"
+        ],
+        "range": null,
+        "name": "sz_dof",
+        "enum": null,
+        "long_name": "sz-displacement",
+        "units": null
+      }
+    ]
+  }
+]

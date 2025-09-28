@@ -1,0 +1,80 @@
+[
+  {
+    "class": "FECentrifugalBodyForce",
+    "base": "FEBodyForce",
+    "registration": "centrifugal",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "w",
+          "\"angular_speed\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_ANGULAR_VELOCITY"
+            ]
+          }
+        ],
+        "member": "w",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "angular_speed"
+        ],
+        "range": null,
+        "name": "angular_speed",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_ANGULAR_VELOCITY"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "n",
+          "\"rotation_axis\""
+        ],
+        "chain": [],
+        "member": "n",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "rotation_axis"
+        ],
+        "range": null,
+        "name": "rotation_axis",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "c",
+          "\"rotation_center\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_LENGTH"
+            ]
+          }
+        ],
+        "member": "c",
+        "ctype": "vec3d",
+        "default": null,
+        "strings": [
+          "rotation_center"
+        ],
+        "range": null,
+        "name": "rotation_center",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_LENGTH"
+      }
+    ]
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "class": "FEPrestrainElastic",
+    "base": "FEElasticMaterial",
+    "registration": "prestrain elastic",
+    "params": [
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_mat",
+          "\"elastic\""
+        ],
+        "chain": [],
+        "member": "m_mat",
+        "ctype": "FEElasticMaterial *",
+        "default": null,
+        "strings": [
+          "elastic"
+        ],
+        "range": null,
+        "name": "elastic",
+        "enum": null,
+        "long_name": null,
+        "units": null,
+        "definition": [
+          {
+            "class": "FEElasticMaterial",
+            "base": "FESolidMaterial",
+            "registration": null,
+            "params": []
+          }
+        ]
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_Fp",
+          "\"prestrain\"",
+          "false"
+        ],
+        "chain": [],
+        "member": "m_Fp",
+        "ctype": "FEPrestrainGradient *",
+        "default": null,
+        "strings": [
+          "prestrain"
+        ],
+        "range": null,
+        "name": "prestrain",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

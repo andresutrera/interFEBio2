@@ -1,0 +1,66 @@
+[
+  {
+    "class": "PardisoSolver",
+    "base": "LinearSolver",
+    "registration": "pardiso",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_print_cn",
+          "\"print_condition_number\""
+        ],
+        "chain": [],
+        "member": "m_print_cn",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "print_condition_number"
+        ],
+        "range": null,
+        "name": "print_condition_number",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_iparm3",
+          "\"precondition\""
+        ],
+        "chain": [],
+        "member": "m_iparm3",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "precondition"
+        ],
+        "range": null,
+        "name": "precondition",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_msglvl",
+          "\"msglvl\""
+        ],
+        "chain": [],
+        "member": "m_msglvl",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "msglvl"
+        ],
+        "range": null,
+        "name": "msglvl",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

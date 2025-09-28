@@ -1,0 +1,84 @@
+{
+  "BoundaryConditions": [
+    {
+      "class": "FEBCPrescribedDeformation",
+      "python_name": "FEBCPrescribedDeformation",
+      "header": "FEBioMech/FEBCPrescribedDeformation.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEBCRigidDeformation",
+      "python_name": "FEBCRigidDeformation",
+      "header": "FEBioMech/FEBCRigidDeformation.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEFixedDisplacement",
+      "python_name": "FEFixedDisplacement",
+      "header": "FEBioMech/FEFixedDisplacement.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEFixedRotation",
+      "python_name": "FEFixedRotation",
+      "header": "FEBioMech/FEFixedRotation.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEFixedShellDisplacement",
+      "python_name": "FEFixedShellDisplacement",
+      "header": "FEBioMech/FEFixedShellDisplacement.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FELinearConstraint",
+      "python_name": "FELinearConstraint",
+      "header": "FECore/FELinearConstraint.h",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FELinearConstraintDOF",
+      "python_name": "FELinearConstraintDOF",
+      "header": "FECore/FELinearConstraint.h",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEPrescribedDisplacement",
+      "python_name": "FEPrescribedDisplacement",
+      "header": "FEBioMech/FEPrescribedDisplacement.h",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEPrescribedNormalDisplacement",
+      "python_name": "FEPrescribedNormalDisplacement",
+      "header": "FEBioMech/FEPrescribedNormalDisplacement.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEPrescribedRotation",
+      "python_name": "FEPrescribedRotation",
+      "header": "FEBioMech/FEPrescribedRotation.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FEPrescribedShellDisplacement",
+      "python_name": "FEPrescribedShellDisplacement",
+      "header": "FEBioMech/FEPrescribedShellDisplacement.h",
+      "xml_section": "Boundary Conditions",
+      "xml_tag": "bc"
+    },
+    {
+      "class": "FERigidNodeSet",
+      "python_name": "FERigidNodeSet",
+      "header": "FEBioMech/FERigidNodeSet.h",
+      "xml_tag": "bc"
+    }
+  ]
+}

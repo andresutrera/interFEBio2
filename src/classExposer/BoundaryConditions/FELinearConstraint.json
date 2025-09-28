@@ -1,0 +1,114 @@
+[
+  {
+    "class": "FELinearConstraintDOF",
+    "base": "FECoreClass",
+    "registration": "child_dof",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "dof",
+          "\"dof\"",
+          "0",
+          "\"$(dof_list)\""
+        ],
+        "chain": [],
+        "member": "dof",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "dof",
+          "$(dof_list)"
+        ],
+        "range": "$(dof_list)",
+        "name": "dof",
+        "enum": "$(dof_list)",
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "node",
+          "\"node\""
+        ],
+        "chain": [],
+        "member": "node",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "node"
+        ],
+        "range": null,
+        "name": "node",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "val",
+          "\"value\""
+        ],
+        "chain": [],
+        "member": "val",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "value"
+        ],
+        "range": null,
+        "name": "value",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  },
+  {
+    "class": "FELinearConstraint",
+    "base": "FEBoundaryCondition",
+    "registration": "linear constraint",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_off",
+          "\"offset\""
+        ],
+        "chain": [],
+        "member": "m_off",
+        "ctype": "double",
+        "default": 0.0,
+        "strings": [
+          "offset"
+        ],
+        "range": null,
+        "name": "offset",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_childDof",
+          "\"child_dof\""
+        ],
+        "chain": [],
+        "member": "m_childDof",
+        "ctype": "std::vector<FELinearConstraintDOF *>",
+        "default": null,
+        "strings": [
+          "child_dof"
+        ],
+        "range": null,
+        "name": "child_dof",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

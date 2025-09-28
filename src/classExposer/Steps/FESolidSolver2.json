@@ -1,0 +1,237 @@
+[
+  {
+    "class": "FESolidSolver2",
+    "base": "FENewtonSolver",
+    "registration": "solid",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_Dtol",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"dtol\""
+        ],
+        "chain": [],
+        "member": "m_Dtol",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "dtol"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "dtol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_Etol",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"etol\""
+        ],
+        "chain": [],
+        "member": "m_Etol",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "etol"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "etol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_Rtol",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"rtol\""
+        ],
+        "chain": [],
+        "member": "m_Rtol",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "rtol"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "rtol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_rhoi",
+          "\"rhoi\""
+        ],
+        "chain": [],
+        "member": "m_rhoi",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "rhoi"
+        ],
+        "range": null,
+        "name": "rhoi",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_alpha",
+          "\"alpha\""
+        ],
+        "chain": [],
+        "member": "m_alpha",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "alpha"
+        ],
+        "range": null,
+        "name": "alpha",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_beta",
+          "\"beta\""
+        ],
+        "chain": [],
+        "member": "m_beta",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "beta"
+        ],
+        "range": null,
+        "name": "beta",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_gamma",
+          "\"gamma\""
+        ],
+        "chain": [],
+        "member": "m_gamma",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "gamma"
+        ],
+        "range": null,
+        "name": "gamma",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_logSolve",
+          "\"logSolve\""
+        ],
+        "chain": [],
+        "member": "m_logSolve",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "logSolve"
+        ],
+        "range": null,
+        "name": "logSolve",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_arcLength",
+          "\"arc_length\""
+        ],
+        "chain": [],
+        "member": "m_arcLength",
+        "ctype": "int",
+        "default": null,
+        "strings": [
+          "arc_length"
+        ],
+        "range": null,
+        "name": "arc_length",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_al_scale",
+          "\"arc_length_scale\""
+        ],
+        "chain": [],
+        "member": "m_al_scale",
+        "ctype": "double",
+        "default": null,
+        "strings": [
+          "arc_length_scale"
+        ],
+        "range": null,
+        "name": "arc_length_scale",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_init_accelerations",
+          "\"init_accelerations\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_HIDDEN"
+            ]
+          }
+        ],
+        "member": "m_init_accelerations",
+        "ctype": "bool",
+        "default": null,
+        "strings": [
+          "init_accelerations"
+        ],
+        "range": null,
+        "name": "init_accelerations",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,61 @@
+[
+  {
+    "class": "FERigidNodeSet",
+    "base": "FENodalBC",
+    "registration": "rigid",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_rigidMat",
+          "\"rb\""
+        ],
+        "chain": [
+          {
+            "func": "setEnums",
+            "args": [
+              "\"$(rigid_materials)\""
+            ]
+          }
+        ],
+        "member": "m_rigidMat",
+        "ctype": "int",
+        "default": -1,
+        "strings": [
+          "rb"
+        ],
+        "range": null,
+        "name": "rb",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bshellBC",
+          "\"clamp_shells\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FEParamFlag::FE_PARAM_HIDDEN"
+            ]
+          }
+        ],
+        "member": "m_bshellBC",
+        "ctype": "bool",
+        "default": true,
+        "strings": [
+          "clamp_shells"
+        ],
+        "range": null,
+        "name": "clamp_shells",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]

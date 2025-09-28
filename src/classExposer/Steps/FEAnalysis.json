@@ -1,0 +1,305 @@
+[
+  {
+    "class": "FEAnalysis",
+    "base": "FECoreBase",
+    "registration": "analysis",
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_nanalysis",
+          "\"analysis\""
+        ],
+        "chain": [],
+        "member": "m_nanalysis",
+        "ctype": "int",
+        "default": 0,
+        "strings": [
+          "analysis"
+        ],
+        "range": null,
+        "name": "analysis",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_ntime",
+          "FE_RANGE_GREATER_OR_EQUAL(-1)",
+          "\"time_steps\""
+        ],
+        "chain": [],
+        "member": "m_ntime",
+        "ctype": "int",
+        "default": 10,
+        "strings": [
+          "time_steps"
+        ],
+        "range": {
+          "min": -1,
+          "min_inclusive": true
+        },
+        "name": "time_steps",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_dt0",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"step_size\""
+        ],
+        "chain": [
+          {
+            "func": "setUnits",
+            "args": [
+              "UNIT_TIME"
+            ]
+          },
+          {
+            "func": "SetFlags",
+            "args": [
+              "0"
+            ]
+          }
+        ],
+        "member": "m_dt0",
+        "ctype": "double",
+        "default": 0.1,
+        "strings": [
+          "step_size"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "step_size",
+        "enum": null,
+        "long_name": null,
+        "units": "UNIT_TIME"
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_final_time",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"final_time\""
+        ],
+        "chain": [
+          {
+            "func": "SetFlags",
+            "args": [
+              "FE_PARAM_HIDDEN"
+            ]
+          }
+        ],
+        "member": "m_final_time",
+        "ctype": "double",
+        "default": 0.0,
+        "strings": [
+          "final_time"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "final_time",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bplotZero",
+          "\"plot_zero_state\""
+        ],
+        "chain": [],
+        "member": "m_bplotZero",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "plot_zero_state"
+        ],
+        "range": null,
+        "name": "plot_zero_state",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_nplotRange",
+          "2",
+          "\"plot_range\""
+        ],
+        "chain": [],
+        "member": "m_nplotRange",
+        "ctype": "int[2]",
+        "default": null,
+        "strings": [
+          "plot_range"
+        ],
+        "range": null,
+        "name": "plot_range",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_nplot",
+          "\"plot_level\"",
+          "0",
+          "\"PLOT_NEVER\\0PLOT_MAJOR_ITRS\\0PLOT_MINOR_ITRS\\0PLOT_MUST_POINTS\\0PLOT_FINAL\\0PLOT_AUGMENTATIONS\\0PLOT_STEP_FINAL\\0\""
+        ],
+        "chain": [],
+        "member": "m_nplot",
+        "ctype": "int",
+        "default": "FE_PLOT_MAJOR_ITRS",
+        "strings": [
+          "plot_level",
+          "PLOT_NEVER\\0PLOT_MAJOR_ITRS\\0PLOT_MINOR_ITRS\\0PLOT_MUST_POINTS\\0PLOT_FINAL\\0PLOT_AUGMENTATIONS\\0PLOT_STEP_FINAL\\0"
+        ],
+        "range": null,
+        "name": "plot_level",
+        "enum": [
+          "PLOT_NEVER",
+          "PLOT_MAJOR_ITRS",
+          "PLOT_MINOR_ITRS",
+          "PLOT_MUST_POINTS",
+          "PLOT_FINAL",
+          "PLOT_AUGMENTATIONS",
+          "PLOT_STEP_FINAL"
+        ],
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_noutput",
+          "\"output_level\"",
+          "0",
+          "\"OUTPUT_NEVER\\0OUTPUT_MAJOR_ITRS\\0OUTPUT_MINOR_ITRS\\0OUTPUT_MUST_POINTS\\0OUTPUT_FINAL\\0\""
+        ],
+        "chain": [],
+        "member": "m_noutput",
+        "ctype": "int",
+        "default": "FE_OUTPUT_MAJOR_ITRS",
+        "strings": [
+          "output_level",
+          "OUTPUT_NEVER\\0OUTPUT_MAJOR_ITRS\\0OUTPUT_MINOR_ITRS\\0OUTPUT_MUST_POINTS\\0OUTPUT_FINAL\\0"
+        ],
+        "range": null,
+        "name": "output_level",
+        "enum": [
+          "OUTPUT_NEVER",
+          "OUTPUT_MAJOR_ITRS",
+          "OUTPUT_MINOR_ITRS",
+          "OUTPUT_MUST_POINTS",
+          "OUTPUT_FINAL"
+        ],
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_nplot_stride",
+          "\"plot_stride\""
+        ],
+        "chain": [],
+        "member": "m_nplot_stride",
+        "ctype": "int",
+        "default": 1,
+        "strings": [
+          "plot_stride"
+        ],
+        "range": null,
+        "name": "plot_stride",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_noutput_stride",
+          "\"output_stride\""
+        ],
+        "chain": [],
+        "member": "m_noutput_stride",
+        "ctype": "int",
+        "default": 1,
+        "strings": [
+          "output_stride"
+        ],
+        "range": null,
+        "name": "output_stride",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_badaptorReSolve",
+          "\"adaptor_re_solve\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"re-solve after adaptation\""
+            ]
+          }
+        ],
+        "member": "m_badaptorReSolve",
+        "ctype": "bool",
+        "default": true,
+        "strings": [
+          "adaptor_re_solve"
+        ],
+        "range": null,
+        "name": "adaptor_re_solve",
+        "enum": null,
+        "long_name": "re-solve after adaptation",
+        "units": null
+      },
+      {
+        "macro": "ADD_PROPERTY",
+        "args": [
+          "m_timeController",
+          "\"time_stepper\"",
+          "FEProperty::Preferred"
+        ],
+        "chain": [
+          {
+            "func": "SetDefaultType",
+            "args": [
+              "\"default\""
+            ]
+          }
+        ],
+        "member": "m_timeController",
+        "ctype": "FETimeStepController *",
+        "default": null,
+        "strings": [
+          "time_stepper"
+        ],
+        "range": null,
+        "name": "time_stepper",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]
