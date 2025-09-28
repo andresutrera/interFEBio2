@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..common.base import Annotated, FEBioEntity
+from ..common.base import Annotated, FEBioEntity, RangeSpec
 
 from ..Core import FEConstFunction
 from ..Core import FEConstValueMat3d
@@ -74,41 +74,41 @@ class FEConstPrestrainGradient(FEPrestrainGradient):
 
 @dataclass(kw_only=True)
 class FEDamageCDF(FEMaterialProperty):
-    dmax: Annotated[float, "0 <= x <= 1"] = field(metadata={'fe_name': 'Dmax', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
+    dmax: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True, max=1.0, max_inclusive=True)'] = field(metadata={'fe_name': 'Dmax', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
     fe_class: str = field(init=False, default='FEDamageCDF')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCDFGamma(FEDamageCDF):
-    alpha: Annotated[float, "x > 0"] = field(default=2, metadata={'fe_name': 'alpha', 'range': {'min': 0, 'min_inclusive': False}, 'default': 2})
-    mu: Annotated[float, "x >= 0"] = field(default=4, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 4})
+    alpha: Annotated[float, 'RangeSpec(min=0, min_inclusive=False)'] = field(default=2, metadata={'fe_name': 'alpha', 'range': {'min': 0, 'min_inclusive': False}, 'default': 2})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=4, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 4})
     fe_class: str = field(init=False, default='CDF gamma')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCDFLogNormal(FEDamageCDF):
-    mu: Annotated[float, "x > 0"] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
-    sigma: Annotated[float, "x > 0"] = field(default=1, metadata={'fe_name': 'sigma', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
+    sigma: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'sigma', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
     fe_class: str = field(init=False, default='CDF log-normal')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCDFPQP(FEDamageCDF):
-    mumin: Annotated[float, "x >= 0"] = field(default=0, metadata={'fe_name': 'mumin', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0})
+    mumin: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0, metadata={'fe_name': 'mumin', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0})
     mumax: float = field(default=1, metadata={'fe_name': 'mumax', 'default': 1})
     fe_class: str = field(init=False, default='CDF quintic')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCDFSimo(FEDamageCDF):
-    a: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'a', 'range': {'min': 0.0, 'min_inclusive': False}})
-    b: Annotated[float, "0 <= x <= 1"] = field(metadata={'fe_name': 'b', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
+    a: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'a', 'range': {'min': 0.0, 'min_inclusive': False}})
+    b: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True, max=1.0, max_inclusive=True)'] = field(metadata={'fe_name': 'b', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
     fe_class: str = field(init=False, default='CDF Simo')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCDFStep(FEDamageCDF):
-    mu: Annotated[float, "x >= 0"] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
     fe_class: str = field(init=False, default='CDF step')
     xml_tag: str = field(init=False, default='material')
 
@@ -120,15 +120,15 @@ class FEDamageCDFUser(FEDamageCDF):
 
 @dataclass(kw_only=True)
 class FEDamageCDFWeibull(FEDamageCDF):
-    alpha: Annotated[float, "x >= 0"] = field(default=1, metadata={'fe_name': 'alpha', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
-    mu: Annotated[float, "x >= 0"] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    alpha: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'alpha', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
     ploc: float = field(default=0, metadata={'fe_name': 'ploc', 'default': 0})
     fe_class: str = field(init=False, default='CDF Weibull')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEDamageCriterionDrucker(FEDamageCriterion):
-    c: Annotated[float, "-27.0/8.0 <= x <= 9.0/4.0"] = field(metadata={'fe_name': 'c', 'range': {'min': '-27.0/8.0', 'max': '9.0/4.0', 'min_inclusive': True, 'max_inclusive': True}})
+    c: Annotated[float, 'RangeSpec(min=-3.375, min_inclusive=True, max=2.25, max_inclusive=True)'] = field(metadata={'fe_name': 'c', 'range': {'min': '-27.0/8.0', 'max': '9.0/4.0', 'min_inclusive': True, 'max_inclusive': True}})
     fe_class: str = field(init=False, default='DC Drucker shear stress')
     xml_tag: str = field(init=False, default='material')
 
@@ -142,30 +142,30 @@ class FEDamageMaterialUC(FEUncoupledMaterial):
 
 @dataclass(kw_only=True)
 class FEFungOrthotropic(FEUncoupledMaterial):
-    e1: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'E1', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
-    e2: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'E2', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
-    e3: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'E3', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
-    g12: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'G12', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
-    g23: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'G23', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
-    g31: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'G31', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
+    e1: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'E1', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
+    e2: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'E2', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
+    e3: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'E3', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
+    g12: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'G12', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
+    g23: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'G23', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
+    g31: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'G31', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': True}})
     v12: float = field(metadata={'fe_name': 'v12'})
     v23: float = field(metadata={'fe_name': 'v23'})
     v31: float = field(metadata={'fe_name': 'v31'})
-    c: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'c', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
+    c: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'c', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}})
     mat_axis: FEConstValueMat3d | FEMat3dLocalElementMap | FEMat3dSphericalMap | FEMat3dCylindricalMap | FEMat3dPolarMap | FEMat3dVectorMap | FEMappedValueMat3d = field(metadata={'fe_name': 'mat_axis', 'is_property': True})
     fe_class: str = field(init=False, default='Fung orthotropic')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEIncompNeoHookean(FEUncoupledMaterial):
-    g: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'G', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': 'shear modulus'})
+    g: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'G', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': 'shear modulus'})
     fe_class: str = field(init=False, default='incomp neo-Hookean')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FEIsotropicElastic(FEElasticMaterial):
-    e: Annotated[float, "x > 0"] = field(metadata={'fe_name': 'E', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': "Young's modulus"})
-    v: Annotated[float, "-1 <= x < 0.5"] = field(metadata={'fe_name': 'v', 'range': {'min': -1.0, 'max': 0.5, 'min_inclusive': True, 'max_inclusive': False}, 'long_name': "Poisson's ratio"})
+    e: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'E', 'units': 'UNIT_PRESSURE', 'range': {'min': 0.0, 'min_inclusive': False}, 'long_name': "Young's modulus"})
+    v: Annotated[float, 'RangeSpec(min=-1.0, min_inclusive=True, max=0.5, max_inclusive=False)'] = field(metadata={'fe_name': 'v', 'range': {'min': -1.0, 'max': 0.5, 'min_inclusive': True, 'max_inclusive': False}, 'long_name': "Poisson's ratio"})
     fe_class: str = field(init=False, default='isotropic elastic')
     xml_tag: str = field(init=False, default='material')
 

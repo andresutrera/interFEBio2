@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..common.base import Annotated, FEBioEntity
+from ..common.base import Annotated, FEBioEntity, RangeSpec
 
 @dataclass(kw_only=True)
 class Vec3d:
@@ -44,9 +44,9 @@ __all__ = [
 @dataclass(kw_only=True)
 class BFGSSolver(FENewtonStrategy):
     max_ups: int = field(metadata={'fe_name': 'max_ups'})
-    max_buffer_size: Annotated[int, "x >= 0"] = field(metadata={'fe_name': 'max_buffer_size', 'range': {'min': 0, 'min_inclusive': True}})
+    max_buffer_size: Annotated[int, 'RangeSpec(min=0, min_inclusive=True)'] = field(metadata={'fe_name': 'max_buffer_size', 'range': {'min': 0, 'min_inclusive': True}})
     cycle_buffer: bool = field(metadata={'fe_name': 'cycle_buffer'})
-    cmax: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'cmax', 'range': {'min': 0.0, 'min_inclusive': True}})
+    cmax: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'cmax', 'range': {'min': 0.0, 'min_inclusive': True}})
     fe_class: str = field(init=False, default='BFGS')
     xml_tag: str = field(init=False, default='material')
 
@@ -70,9 +70,9 @@ class FEAnalysis(FECoreBase):
 
     plot_range: int = field(metadata={'fe_name': 'plot_range'})
     analysis: int = field(default=0, metadata={'fe_name': 'analysis', 'default': 0})
-    time_steps: Annotated[int, "x >= -1"] = field(default=10, metadata={'fe_name': 'time_steps', 'range': {'min': -1, 'min_inclusive': True}, 'default': 10})
-    step_size: Annotated[float, "x >= 0"] = field(default=0.1, metadata={'fe_name': 'step_size', 'units': 'UNIT_TIME', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.1})
-    final_time: Annotated[float, "x >= 0"] = field(default=0.0, metadata={'fe_name': 'final_time', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.0})
+    time_steps: Annotated[int, 'RangeSpec(min=-1, min_inclusive=True)'] = field(default=10, metadata={'fe_name': 'time_steps', 'range': {'min': -1, 'min_inclusive': True}, 'default': 10})
+    step_size: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0.1, metadata={'fe_name': 'step_size', 'units': 'UNIT_TIME', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.1})
+    final_time: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0.0, metadata={'fe_name': 'final_time', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0.0})
     plot_zero_state: bool = field(default=False, metadata={'fe_name': 'plot_zero_state', 'default': False})
     plot_level: PlotLevel | int = field(default=PlotLevel.PLOT_MAJOR_ITRS, metadata={'fe_name': 'plot_level', 'enum': ['PLOT_NEVER', 'PLOT_MAJOR_ITRS', 'PLOT_MINOR_ITRS', 'PLOT_MUST_POINTS', 'PLOT_FINAL', 'PLOT_AUGMENTATIONS', 'PLOT_STEP_FINAL'], 'enum_class': 'PlotLevel', 'default': 1})
     output_level: OutputLevel | int = field(default=OutputLevel.OUTPUT_MAJOR_ITRS, metadata={'fe_name': 'output_level', 'enum': ['OUTPUT_NEVER', 'OUTPUT_MAJOR_ITRS', 'OUTPUT_MINOR_ITRS', 'OUTPUT_MUST_POINTS', 'OUTPUT_FINAL'], 'enum_class': 'OutputLevel', 'default': 1})
@@ -86,23 +86,23 @@ class FEAnalysis(FECoreBase):
 @dataclass(kw_only=True)
 class FEBroydenStrategy(FENewtonStrategy):
     max_ups: int = field(metadata={'fe_name': 'max_ups'})
-    max_buffer_size: Annotated[int, "x >= 0"] = field(metadata={'fe_name': 'max_buffer_size', 'range': {'min': 0, 'min_inclusive': True}})
+    max_buffer_size: Annotated[int, 'RangeSpec(min=0, min_inclusive=True)'] = field(metadata={'fe_name': 'max_buffer_size', 'range': {'min': 0, 'min_inclusive': True}})
     cycle_buffer: bool = field(metadata={'fe_name': 'cycle_buffer'})
-    cmax: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'cmax', 'range': {'min': 0.0, 'min_inclusive': True}})
+    cmax: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'cmax', 'range': {'min': 0.0, 'min_inclusive': True}})
     fe_class: str = field(init=False, default='Broyden')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
 class FENewtonSolver(FESolver):
-    max_refs: Annotated[int, "x >= 0"] = field(metadata={'fe_name': 'max_refs', 'range': {'min': 0.0, 'min_inclusive': True}})
+    max_refs: Annotated[int, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'max_refs', 'range': {'min': 0.0, 'min_inclusive': True}})
     check_zero_diagonal: bool = field(metadata={'fe_name': 'check_zero_diagonal'})
     zero_diagonal_tol: float = field(metadata={'fe_name': 'zero_diagonal_tol'})
     force_partition: int = field(metadata={'fe_name': 'force_partition'})
     reform_each_time_step: bool = field(metadata={'fe_name': 'reform_each_time_step'})
     reform_augment: bool = field(metadata={'fe_name': 'reform_augment'})
     diverge_reform: bool = field(metadata={'fe_name': 'diverge_reform'})
-    min_residual: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'min_residual', 'range': {'min': 0.0, 'min_inclusive': True}})
-    max_residual: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'max_residual', 'range': {'min': 0.0, 'min_inclusive': True}})
+    min_residual: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'min_residual', 'range': {'min': 0.0, 'min_inclusive': True}})
+    max_residual: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'max_residual', 'range': {'min': 0.0, 'min_inclusive': True}})
     qn_method: Optional[FENewtonStrategy] = field(default=None, metadata={'fe_name': 'qn_method', 'is_property': True, 'optional': True})
     linear_solver: Optional[LinearSolver] = field(default=None, metadata={'fe_name': 'linear_solver', 'is_property': True, 'optional': True})
     fe_class: str = field(init=False, default='FENewtonSolver')
@@ -110,9 +110,9 @@ class FENewtonSolver(FESolver):
 
 @dataclass(kw_only=True)
 class FESolidSolver2(FENewtonSolver):
-    dtol: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'dtol', 'range': {'min': 0.0, 'min_inclusive': True}})
-    etol: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'etol', 'range': {'min': 0.0, 'min_inclusive': True}})
-    rtol: Annotated[float, "x >= 0"] = field(metadata={'fe_name': 'rtol', 'range': {'min': 0.0, 'min_inclusive': True}})
+    dtol: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'dtol', 'range': {'min': 0.0, 'min_inclusive': True}})
+    etol: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'etol', 'range': {'min': 0.0, 'min_inclusive': True}})
+    rtol: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(metadata={'fe_name': 'rtol', 'range': {'min': 0.0, 'min_inclusive': True}})
     rhoi: float = field(metadata={'fe_name': 'rhoi'})
     alpha: float = field(metadata={'fe_name': 'alpha'})
     beta: float = field(metadata={'fe_name': 'beta'})

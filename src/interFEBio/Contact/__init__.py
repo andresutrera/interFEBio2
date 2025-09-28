@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..common.base import Annotated, FEBioEntity
+from ..common.base import Annotated, FEBioEntity, RangeSpec
 
 from ..common.regions import SurfaceRef, coerce_surface
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Any, Optional
 
@@ -13,7 +13,51 @@ try:  # pragma: no cover - typing fallback
 except ImportError:  # pragma: no cover
     from typing_extensions import Annotated  # type: ignore
 
-__all__ = ["Annotated", "FEBioEntity", "indent_xml", "describe_range", "validate_range"]
+__all__ = [
+    "Annotated",
+    "FEBioEntity",
+    "RangeSpec",
+    "indent_xml",
+    "describe_range",
+    "validate_range",
+]
+
+
+@dataclass(slots=True)
+class RangeSpec:
+    """Structured range descriptor attached to Annotated metadata."""
+
+    min: float | None = None
+    min_inclusive: bool = True
+    max: float | None = None
+    max_inclusive: bool = True
+    not_equal: float | None = None
+    min_expr: str | None = None
+    max_expr: str | None = None
+    not_equal_expr: str | None = None
+    raw: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        if self.min is not None:
+            data["min"] = self.min
+            data["min_inclusive"] = self.min_inclusive
+        elif self.min_expr is not None:
+            data["min_expr"] = self.min_expr
+            data["min_inclusive"] = self.min_inclusive
+        if self.max is not None:
+            data["max"] = self.max
+            data["max_inclusive"] = self.max_inclusive
+        elif self.max_expr is not None:
+            data["max_expr"] = self.max_expr
+            data["max_inclusive"] = self.max_inclusive
+        if self.not_equal is not None:
+            data["not_equal"] = self.not_equal
+        elif self.not_equal_expr is not None:
+            data["not_equal_expr"] = self.not_equal_expr
+        if self.raw is not None:
+            data["raw"] = self.raw
+        return data
 
 
 def indent_xml(element: ET.Element, level: int = 0) -> None:
@@ -43,26 +87,30 @@ def _coerce_numeric(value: Any) -> Optional[float]:
 def describe_range(spec: Any) -> str:
     """Return a human-readable range description for metadata."""
 
-    if not isinstance(spec, dict):
+    if isinstance(spec, RangeSpec):
+        spec_dict = spec.as_dict()
+    elif isinstance(spec, dict):
+        spec_dict = spec
+    else:
         return "specified range"
-    min_val = spec.get("min")
-    max_val = spec.get("max")
-    not_equal = spec.get("not_equal")
+    min_val = spec_dict.get("min", spec_dict.get("min_expr"))
+    max_val = spec_dict.get("max", spec_dict.get("max_expr"))
+    not_equal = spec_dict.get("not_equal", spec_dict.get("not_equal_expr"))
     parts: list[str] = []
     if min_val is not None and max_val is not None:
-        left = "<=" if spec.get("min_inclusive", True) else "<"
-        right = "<=" if spec.get("max_inclusive", True) else "<"
-        parts.append(f"{min_val} {left} x {right} {max_val}")
+        left = "<=" if spec_dict.get("min_inclusive", True) else "<"
+        right = "<=" if spec_dict.get("max_inclusive", True) else "<"
+        parts.append(f"{min_val} {left} value {right} {max_val}")
     else:
         if min_val is not None:
-            op = ">=" if spec.get("min_inclusive", True) else ">"
-            parts.append(f"x {op} {min_val}")
+            op = ">=" if spec_dict.get("min_inclusive", True) else ">"
+            parts.append(f"value {op} {min_val}")
         if max_val is not None:
-            op = "<=" if spec.get("max_inclusive", True) else "<"
-            parts.append(f"x {op} {max_val}")
+            op = "<=" if spec_dict.get("max_inclusive", True) else "<"
+            parts.append(f"value {op} {max_val}")
     if not_equal is not None:
-        parts.append(f"x != {not_equal}")
-    raw_args = spec.get("raw_args")
+        parts.append(f"value != {not_equal}")
+    raw_args = spec_dict.get("raw") or spec_dict.get("raw_args")
     if raw_args and not parts:
         parts.append(f"range({raw_args})")
     return " and ".join(parts) if parts else "specified range"
@@ -78,24 +126,30 @@ def validate_range(owner: str, field_name: str, value: Any, spec: Any) -> None:
     numeric = _coerce_numeric(value)
     if numeric is None:
         return
-    message = describe_range(spec)
-    min_val = _coerce_numeric(spec.get("min"))
+    if isinstance(spec, RangeSpec):
+        spec_dict = spec.as_dict()
+    elif isinstance(spec, dict):
+        spec_dict = spec
+    else:
+        return
+    message = describe_range(spec_dict)
+    min_val = _coerce_numeric(spec_dict.get("min", spec_dict.get("min_expr")))
     if min_val is not None:
-        if spec.get("min_inclusive", True):
+        if spec_dict.get("min_inclusive", True):
             if numeric < min_val:
                 raise ValueError(f"{owner}.{field_name} must satisfy {message} (got {value!r})")
         else:
             if numeric <= min_val:
                 raise ValueError(f"{owner}.{field_name} must satisfy {message} (got {value!r})")
-    max_val = _coerce_numeric(spec.get("max"))
+    max_val = _coerce_numeric(spec_dict.get("max", spec_dict.get("max_expr")))
     if max_val is not None:
-        if spec.get("max_inclusive", True):
+        if spec_dict.get("max_inclusive", True):
             if numeric > max_val:
                 raise ValueError(f"{owner}.{field_name} must satisfy {message} (got {value!r})")
         else:
             if numeric >= max_val:
                 raise ValueError(f"{owner}.{field_name} must satisfy {message} (got {value!r})")
-    not_equal = spec.get("not_equal")
+    not_equal = spec_dict.get("not_equal", spec_dict.get("not_equal_expr"))
     if not_equal is not None:
         neq_numeric = _coerce_numeric(not_equal)
         if neq_numeric is not None:

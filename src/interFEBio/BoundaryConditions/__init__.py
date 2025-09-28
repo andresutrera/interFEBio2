@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..common.base import Annotated, FEBioEntity
+from ..common.base import Annotated, FEBioEntity, RangeSpec
 
 from ..Core import Vec3d
 from ..common.regions import NodeSetRef, SurfaceRef, coerce_nodeset, coerce_surface
@@ -47,7 +47,6 @@ class FEPrescribedSurface(FEBoundaryCondition):
 
 __all__ = [
     'FEBCPrescribedDeformation',
-    'FEBCPrescribedDeformation2O',
     'FEBCRigidDeformation',
     'FEFixedDisplacement',
     'FEFixedRotation',
@@ -73,15 +72,6 @@ class FEBCPrescribedDeformation(FEPrescribedNodeSet):
     scale: float = field(metadata={'fe_name': 'scale'})
     f: mat3d = field(metadata={'fe_name': 'F'})
     fe_class: str = field(init=False, default='prescribed deformation')
-    xml_tag: str = field(init=False, default='bc')
-
-@dataclass(kw_only=True)
-class FEBCPrescribedDeformation2O(FEPrescribedNodeSet):
-    scale: float = field(metadata={'fe_name': 'scale'})
-    f: mat3d = field(metadata={'fe_name': 'F'})
-    g: tens3drs = field(metadata={'fe_name': 'G'})
-    reference: int = field(metadata={'fe_name': 'reference'})
-    fe_class: str = field(init=False, default='prescribed deformation 2O')
     xml_tag: str = field(init=False, default='bc')
 
 @dataclass(kw_only=True)
