@@ -1295,7 +1295,8 @@ def _sanitise_category(category: str) -> str:
 
 def _category_module_path(output_dir: Path, category: str) -> Path:
     safe = _sanitise_category(category)
-    return output_dir / safe / "__init__.py"
+    filename = f"Generated_{safe}_automatic.py"
+    return output_dir / safe / filename
 
 
 def _write_package_init(
