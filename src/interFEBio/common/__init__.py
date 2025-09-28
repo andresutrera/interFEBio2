@@ -2,12 +2,12 @@
 
 from .base import Annotated, FEBioEntity, describe_range, indent_xml, validate_range
 from .regions import (
+    ElementSetRef,
     NodeSetRef,
     SurfaceRef,
-    ElementSetRef,
+    coerce_elementset,
     coerce_nodeset,
     coerce_surface,
-    coerce_elementset,
 )
 
 __all__ = [

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Any, Optional
-
-import xml.etree.ElementTree as ET
 
 try:  # pragma: no cover - typing fallback
     from typing import Annotated  # type: ignore
@@ -62,7 +61,6 @@ class RangeSpec:
 
 def indent_xml(element: ET.Element, level: int = 0) -> None:
     """Recursively indent an XML tree for pretty-printing."""
-
     children = list(element)
     if children:
         if not element.text or not element.text.strip():
@@ -86,7 +84,6 @@ def _coerce_numeric(value: Any) -> Optional[float]:
 
 def describe_range(spec: Any) -> str:
     """Return a human-readable range description for metadata."""
-
     if isinstance(spec, RangeSpec):
         spec_dict = spec.as_dict()
     elif isinstance(spec, dict):
@@ -118,7 +115,6 @@ def describe_range(spec: Any) -> str:
 
 def validate_range(owner: str, field_name: str, value: Any, spec: Any) -> None:
     """Validate ``value`` against ``spec`` and raise ``ValueError`` on failure."""
-
     if spec is None or isinstance(spec, str) or value is None:
         return
     if isinstance(value, Enum):
