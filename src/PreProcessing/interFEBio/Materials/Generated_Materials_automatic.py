@@ -43,13 +43,6 @@ class FEUncoupledMaterial(FEBioEntity):
 __all__ = [
     'FEConstPrestrainGradient',
     'FEDamageCDF',
-    'FEDamageCDFGamma',
-    'FEDamageCDFLogNormal',
-    'FEDamageCDFPQP',
-    'FEDamageCDFSimo',
-    'FEDamageCDFStep',
-    'FEDamageCDFUser',
-    'FEDamageCDFWeibull',
     'FEDamageCriterionDrucker',
     'FEDamageMaterialUC',
     'FEFungOrthotropic',
@@ -59,6 +52,13 @@ __all__ = [
     'FEPrestrainElastic',
     'FEUncoupledViscoElasticMaterial',
     'FEYeoh',
+    'FEDamageCDFGamma',
+    'FEDamageCDFLogNormal',
+    'FEDamageCDFPQP',
+    'FEDamageCDFSimo',
+    'FEDamageCDFStep',
+    'FEDamageCDFUser',
+    'FEDamageCDFWeibull',
 ]
 
 @dataclass(kw_only=True)
@@ -72,54 +72,6 @@ class FEConstPrestrainGradient(FEPrestrainGradient):
 class FEDamageCDF(FEMaterialProperty):
     dmax: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True, max=1.0, max_inclusive=True)'] = field(metadata={'fe_name': 'Dmax', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
     fe_class: str = field(init=False, default='FEDamageCDF')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFGamma(FEDamageCDF):
-    alpha: Annotated[float, 'RangeSpec(min=0, min_inclusive=False)'] = field(default=2, metadata={'fe_name': 'alpha', 'range': {'min': 0, 'min_inclusive': False}, 'default': 2})
-    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=4, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 4})
-    fe_class: str = field(init=False, default='CDF gamma')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFLogNormal(FEDamageCDF):
-    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
-    sigma: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'sigma', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
-    fe_class: str = field(init=False, default='CDF log-normal')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFPQP(FEDamageCDF):
-    mumin: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0, metadata={'fe_name': 'mumin', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0})
-    mumax: float = field(default=1, metadata={'fe_name': 'mumax', 'default': 1})
-    fe_class: str = field(init=False, default='CDF quintic')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFSimo(FEDamageCDF):
-    a: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'a', 'range': {'min': 0.0, 'min_inclusive': False}})
-    b: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True, max=1.0, max_inclusive=True)'] = field(metadata={'fe_name': 'b', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
-    fe_class: str = field(init=False, default='CDF Simo')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFStep(FEDamageCDF):
-    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
-    fe_class: str = field(init=False, default='CDF step')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFUser(FEDamageCDF):
-    cdf: FEConstFunction | FELinearFunction | FEStepFunction | FEMathFunction = field(metadata={'fe_name': 'cdf', 'is_property': True})
-    fe_class: str = field(init=False, default='CDF user')
-    xml_tag: str = field(init=False, default='material')
-
-@dataclass(kw_only=True)
-class FEDamageCDFWeibull(FEDamageCDF):
-    alpha: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'alpha', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
-    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
-    ploc: float = field(default=0, metadata={'fe_name': 'ploc', 'default': 0})
-    fe_class: str = field(init=False, default='CDF Weibull')
     xml_tag: str = field(init=False, default='material')
 
 @dataclass(kw_only=True)
@@ -207,4 +159,52 @@ class FEYeoh(FEUncoupledMaterial):
     c5: Any = field(metadata={'fe_name': 'c5', 'units': 'UNIT_PRESSURE'})
     c6: Any = field(metadata={'fe_name': 'c6', 'units': 'UNIT_PRESSURE'})
     fe_class: str = field(init=False, default='Yeoh')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFGamma(FEDamageCDF):
+    alpha: Annotated[float, 'RangeSpec(min=0, min_inclusive=False)'] = field(default=2, metadata={'fe_name': 'alpha', 'range': {'min': 0, 'min_inclusive': False}, 'default': 2})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=4, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 4})
+    fe_class: str = field(init=False, default='CDF gamma')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFLogNormal(FEDamageCDF):
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
+    sigma: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(default=1, metadata={'fe_name': 'sigma', 'range': {'min': 0.0, 'min_inclusive': False}, 'default': 1})
+    fe_class: str = field(init=False, default='CDF log-normal')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFPQP(FEDamageCDF):
+    mumin: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=0, metadata={'fe_name': 'mumin', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 0})
+    mumax: float = field(default=1, metadata={'fe_name': 'mumax', 'default': 1})
+    fe_class: str = field(init=False, default='CDF quintic')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFSimo(FEDamageCDF):
+    a: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=False)'] = field(metadata={'fe_name': 'a', 'range': {'min': 0.0, 'min_inclusive': False}})
+    b: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True, max=1.0, max_inclusive=True)'] = field(metadata={'fe_name': 'b', 'range': {'min': 0.0, 'max': 1.0, 'min_inclusive': True, 'max_inclusive': True}})
+    fe_class: str = field(init=False, default='CDF Simo')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFStep(FEDamageCDF):
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    fe_class: str = field(init=False, default='CDF step')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFUser(FEDamageCDF):
+    cdf: FEConstFunction | FELinearFunction | FEStepFunction | FEMathFunction = field(metadata={'fe_name': 'cdf', 'is_property': True})
+    fe_class: str = field(init=False, default='CDF user')
+    xml_tag: str = field(init=False, default='material')
+
+@dataclass(kw_only=True)
+class FEDamageCDFWeibull(FEDamageCDF):
+    alpha: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'alpha', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    mu: Annotated[float, 'RangeSpec(min=0.0, min_inclusive=True)'] = field(default=1, metadata={'fe_name': 'mu', 'range': {'min': 0.0, 'min_inclusive': True}, 'default': 1})
+    ploc: float = field(default=0, metadata={'fe_name': 'ploc', 'default': 0})
+    fe_class: str = field(init=False, default='CDF Weibull')
     xml_tag: str = field(init=False, default='material')

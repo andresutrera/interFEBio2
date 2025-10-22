@@ -159,6 +159,5 @@ class FEPrescribedShellDisplacement(FENodalBC):
 @dataclass(kw_only=True)
 class FERigidNodeSet(FENodalBC):
     rb: int = field(default=-1, metadata={'fe_name': 'rb', 'default': -1})
-    clamp_shells: bool = field(default=True, metadata={'fe_name': 'clamp_shells', 'default': True})
     fe_class: str = field(init=False, default='rigid')
     xml_tag: str = field(init=False, default='bc')

@@ -13,7 +13,7 @@
         "chain": [],
         "member": "m_print_cn",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "print_condition_number"
         ],
@@ -32,7 +32,7 @@
         "chain": [],
         "member": "m_iparm3",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "precondition"
         ],
@@ -51,7 +51,7 @@
         "chain": [],
         "member": "m_msglvl",
         "ctype": "int",
-        "default": null,
+        "default": 0,
         "strings": [
           "msglvl"
         ],

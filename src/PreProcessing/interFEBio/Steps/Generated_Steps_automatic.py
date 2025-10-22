@@ -122,13 +122,13 @@ class FESolidSolver2(FENewtonSolver):
 
 @dataclass(kw_only=True)
 class FETimeStepController(FEParamContainer):
-    max_retries: int = field(metadata={'fe_name': 'max_retries', 'long_name': 'max retries'})
-    opt_iter: int = field(metadata={'fe_name': 'opt_iter', 'long_name': 'optimal iterations'})
-    dtmin: float = field(metadata={'fe_name': 'dtmin', 'long_name': 'min stepsize'})
-    dtmax: float = field(metadata={'fe_name': 'dtmax', 'long_name': 'max stepsize'})
-    aggressiveness: int = field(metadata={'fe_name': 'aggressiveness'})
-    cutback: float = field(metadata={'fe_name': 'cutback'})
-    dtforce: bool = field(metadata={'fe_name': 'dtforce'})
+    max_retries: int = field(default=5, metadata={'fe_name': 'max_retries', 'long_name': 'max retries', 'default': 5})
+    opt_iter: int = field(default=11, metadata={'fe_name': 'opt_iter', 'long_name': 'optimal iterations', 'default': 11})
+    dtmin: float = field(default=0, metadata={'fe_name': 'dtmin', 'long_name': 'min stepsize', 'default': 0})
+    dtmax: float = field(default=0.1, metadata={'fe_name': 'dtmax', 'long_name': 'max stepsize', 'default': 0.1})
+    aggressiveness: int = field(default=0, metadata={'fe_name': 'aggressiveness', 'default': 0})
+    cutback: float = field(default=0.5, metadata={'fe_name': 'cutback', 'default': 0.5})
+    dtforce: bool = field(default=False, metadata={'fe_name': 'dtforce', 'default': False})
     fe_class: str = field(init=False, default='default')
     xml_tag: str = field(init=False, default='material')
 

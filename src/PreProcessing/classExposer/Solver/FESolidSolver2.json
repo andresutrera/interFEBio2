@@ -14,7 +14,7 @@
         "chain": [],
         "member": "m_Dtol",
         "ctype": "double",
-        "default": null,
+        "default": 0.001,
         "strings": [
           "dtol"
         ],
@@ -37,7 +37,7 @@
         "chain": [],
         "member": "m_Etol",
         "ctype": "double",
-        "default": null,
+        "default": 0.01,
         "strings": [
           "etol"
         ],
@@ -60,7 +60,7 @@
         "chain": [],
         "member": "m_Rtol",
         "ctype": "double",
-        "default": null,
+        "default": 0,
         "strings": [
           "rtol"
         ],
@@ -82,7 +82,7 @@
         "chain": [],
         "member": "m_rhoi",
         "ctype": "double",
-        "default": null,
+        "default": -2,
         "strings": [
           "rhoi"
         ],
@@ -101,7 +101,7 @@
         "chain": [],
         "member": "m_alpha",
         "ctype": "double",
-        "default": null,
+        "default": 1.0,
         "strings": [
           "alpha"
         ],
@@ -120,7 +120,7 @@
         "chain": [],
         "member": "m_beta",
         "ctype": "double",
-        "default": null,
+        "default": 0.25,
         "strings": [
           "beta"
         ],
@@ -139,7 +139,7 @@
         "chain": [],
         "member": "m_gamma",
         "ctype": "double",
-        "default": null,
+        "default": 0.5,
         "strings": [
           "gamma"
         ],
@@ -158,7 +158,7 @@
         "chain": [],
         "member": "m_logSolve",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "logSolve"
         ],
@@ -177,13 +177,16 @@
         "chain": [],
         "member": "m_arcLength",
         "ctype": "int",
-        "default": null,
+        "default": "ARC_LENGTH_METHOD::NONE",
         "strings": [
           "arc_length"
         ],
         "range": null,
         "name": "arc_length",
-        "enum": null,
+        "enum": [
+          "NONE",
+          "CRISFIELD"
+        ],
         "long_name": null,
         "units": null
       },
@@ -196,7 +199,7 @@
         "chain": [],
         "member": "m_al_scale",
         "ctype": "double",
-        "default": null,
+        "default": 0.0,
         "strings": [
           "arc_length_scale"
         ],
@@ -222,7 +225,7 @@
         ],
         "member": "m_init_accelerations",
         "ctype": "bool",
-        "default": null,
+        "default": true,
         "strings": [
           "init_accelerations"
         ],

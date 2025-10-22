@@ -20,7 +20,7 @@
         ],
         "member": "m_maxretries",
         "ctype": "int",
-        "default": null,
+        "default": 5,
         "strings": [
           "max_retries"
         ],
@@ -46,7 +46,7 @@
         ],
         "member": "m_iteopt",
         "ctype": "int",
-        "default": null,
+        "default": 11,
         "strings": [
           "opt_iter"
         ],
@@ -72,7 +72,7 @@
         ],
         "member": "m_dtmin",
         "ctype": "double",
-        "default": null,
+        "default": 0,
         "strings": [
           "dtmin"
         ],
@@ -98,7 +98,7 @@
         ],
         "member": "m_dtmax",
         "ctype": "double",
-        "default": null,
+        "default": 0.1,
         "strings": [
           "dtmax"
         ],
@@ -117,7 +117,7 @@
         "chain": [],
         "member": "m_naggr",
         "ctype": "int",
-        "default": null,
+        "default": 0,
         "strings": [
           "aggressiveness"
         ],
@@ -136,7 +136,7 @@
         "chain": [],
         "member": "m_cutback",
         "ctype": "double",
-        "default": null,
+        "default": 0.5,
         "strings": [
           "cutback"
         ],
@@ -155,7 +155,7 @@
         "chain": [],
         "member": "m_dtforce",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "dtforce"
         ],

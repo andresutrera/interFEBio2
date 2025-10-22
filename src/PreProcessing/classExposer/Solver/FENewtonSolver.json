@@ -7,6 +7,94 @@
       {
         "macro": "ADD_PARAMETER",
         "args": [
+          "m_lineSearch->m_LStol",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"lstol\""
+        ],
+        "chain": [],
+        "member": "m_lineSearch->m_LStol",
+        "ctype": "double",
+        "default": 0.9,
+        "strings": [
+          "lstol"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "lstol",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lineSearch->m_LSmin",
+          "FE_RANGE_GREATER_OR_EQUAL(0.0)",
+          "\"lsmin\""
+        ],
+        "chain": [],
+        "member": "m_lineSearch->m_LSmin",
+        "ctype": "double",
+        "default": 0.01,
+        "strings": [
+          "lsmin"
+        ],
+        "range": {
+          "min": 0.0,
+          "min_inclusive": true
+        },
+        "name": "lsmin",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lineSearch->m_LSiter",
+          "FE_RANGE_GREATER_OR_EQUAL(0)",
+          "\"lsiter\""
+        ],
+        "chain": [],
+        "member": "m_lineSearch->m_LSiter",
+        "ctype": "int",
+        "default": 5,
+        "strings": [
+          "lsiter"
+        ],
+        "range": {
+          "min": 0,
+          "min_inclusive": true
+        },
+        "name": "lsiter",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_lineSearch->m_checkJacobians",
+          "\"ls_check_jacobians\""
+        ],
+        "chain": [],
+        "member": "m_lineSearch->m_checkJacobians",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "ls_check_jacobians"
+        ],
+        "range": null,
+        "name": "ls_check_jacobians",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
           "m_maxref",
           "FE_RANGE_GREATER_OR_EQUAL(0.0)",
           "\"max_refs\""
@@ -14,7 +102,7 @@
         "chain": [],
         "member": "m_maxref",
         "ctype": "int",
-        "default": null,
+        "default": 15,
         "strings": [
           "max_refs"
         ],
@@ -36,7 +124,7 @@
         "chain": [],
         "member": "m_bzero_diagonal",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "check_zero_diagonal"
         ],
@@ -55,7 +143,7 @@
         "chain": [],
         "member": "m_zero_tol",
         "ctype": "double",
-        "default": null,
+        "default": 0.0,
         "strings": [
           "zero_diagonal_tol"
         ],
@@ -74,7 +162,7 @@
         "chain": [],
         "member": "m_force_partition",
         "ctype": "int",
-        "default": null,
+        "default": 0,
         "strings": [
           "force_partition"
         ],
@@ -93,7 +181,7 @@
         "chain": [],
         "member": "m_breformtimestep",
         "ctype": "bool",
-        "default": null,
+        "default": true,
         "strings": [
           "reform_each_time_step"
         ],
@@ -112,7 +200,7 @@
         "chain": [],
         "member": "m_breformAugment",
         "ctype": "bool",
-        "default": null,
+        "default": false,
         "strings": [
           "reform_augment"
         ],
@@ -131,7 +219,7 @@
         "chain": [],
         "member": "m_bdivreform",
         "ctype": "bool",
-        "default": null,
+        "default": true,
         "strings": [
           "diverge_reform"
         ],
@@ -151,7 +239,7 @@
         "chain": [],
         "member": "m_Rmin",
         "ctype": "double",
-        "default": null,
+        "default": 1e-20,
         "strings": [
           "min_residual"
         ],
@@ -174,7 +262,7 @@
         "chain": [],
         "member": "m_Rmax",
         "ctype": "double",
-        "default": null,
+        "default": 0,
         "strings": [
           "max_residual"
         ],

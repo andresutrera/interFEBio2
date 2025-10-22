@@ -179,9 +179,12 @@ class FEBioEntity:
     xml_tag: str = ""
 
     def to_xml_element(self, name: str | None = None, *, tag_override: str | None = None) -> ET.Element:
-        tag = tag_override or self.xml_tag or "bc"
-        element = ET.Element(tag)
-        element.set("type", self.fe_class)
+        tag = tag_override or self.xml_tag
+        if tag:
+            element = ET.Element(tag)
+            element.set("type", self.fe_class)
+        else:
+            element = ET.Element("FEBioEntity")
         if name:
             element.set("name", name)
         for field_info in fields(self):

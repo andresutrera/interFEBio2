@@ -12,7 +12,8 @@ import ast
 import json
 import re
 import subprocess
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -45,6 +46,12 @@ CORE_HELPER_IDENTIFIERS: set[str] = {
     "FEParamVec3",
     "FEParamMat3d",
     "FEParamMat3ds",
+}
+
+
+
+PARAM_FLAG_MAP = {
+    'FE_PARAM_HIDDEN': 0x04,
 }
 
 
@@ -292,11 +299,75 @@ def _format_array_type(base: str, length: int) -> str:
     return f"tuple[{repeated}]"
 
 
+def _extract_flag_bits(tokens: Sequence[Any]) -> int:
+    total = 0
+    for token in tokens:
+        for part in str(token).split('|'):
+            entry = part.strip()
+            if not entry:
+                continue
+            try:
+                total |= int(entry, 0)
+                continue
+            except ValueError:
+                pass
+            name = entry.split('::')[-1]
+            bit = PARAM_FLAG_MAP.get(name)
+            if bit is not None:
+                total |= bit
+    return total
+
+
+def _has_hidden_flag(param: Mapping[str, Any]) -> bool:
+    for call in param.get('chain', []):
+        if call.get('func') != 'SetFlags':
+            continue
+        if _extract_flag_bits(call.get('args', [])) & PARAM_FLAG_MAP.get('FE_PARAM_HIDDEN', 0):
+            return True
+    return False
+
+
 def _format_metadata_default(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         parts = [str(item) for item in value if item is not None]
         return ", ".join(parts)
     return value
+
+
+def _infer_numeric_python_type(
+    range_spec: dict[str, Any] | None,
+    raw_default: Any,
+    coerced_default: Any,
+) -> str | None:
+    candidates: list[Any] = []
+
+    def _collect(value: Any) -> None:
+        if isinstance(value, (int, float)):
+            candidates.append(value)
+        elif isinstance(value, str):
+            value = value.strip()
+            try:
+                if "." in value or "e" in value.lower():
+                    candidates.append(float(value))
+                else:
+                    candidates.append(int(value))
+            except ValueError:
+                pass
+
+    if range_spec and isinstance(range_spec, dict):
+        for key in ("min", "max", "not_equal", "min_expr", "max_expr", "not_equal_expr"):
+            _collect(range_spec.get(key))
+    _collect(raw_default)
+    if coerced_default is not _DEFAULT_SENTINEL:
+        _collect(coerced_default)
+
+    if not candidates:
+        return None
+    if any(isinstance(value, float) and not float(value).is_integer() for value in candidates):
+        return "float"
+    if any(isinstance(value, float) for value in candidates):
+        return "float"
+    return "int"
 
 
 def _map_primitive_type(ctype: str | None) -> str | None:
@@ -926,6 +997,8 @@ class ClassRenderer:
 
         parameters: list[ParameterDefinition] = []
         for param in self._metadata.get("params", []):
+            if param.get("hidden") or _has_hidden_flag(param):
+                continue
             macro = param.get("macro")
             fe_name_raw = param.get("name")
             if not fe_name_raw:
@@ -1010,6 +1083,17 @@ class ClassRenderer:
                     meta["default"] = _format_metadata_default(raw_default)
                 elif coerced_default is not _DEFAULT_SENTINEL:
                     meta["default"] = _format_metadata_default(coerced_default)
+
+            if python_type == "Any":
+                inferred = _infer_numeric_python_type(
+                    range_spec, raw_default, coerced_default
+                )
+                if inferred:
+                    python_type = inferred
+            if python_type in {"int", "float"} and isinstance(coerced_default, str):
+                python_type = "str"
+            if python_type in {"int", "float"} and isinstance(raw_default, str):
+                python_type = "str"
 
             annotation_payload = _build_range_annotation_payload(range_spec)
             if annotation_payload and python_type in {"int", "float"}:
@@ -1103,10 +1187,11 @@ def _render_module(
     categories = {category} if category else {item.category for item in manifest_items if item.category}
     extra_imports, extra_exports, stub_exclude, skip_value_types, extra_prefix = _collect_category_injections(categories)
 
-    class_definitions: list[str] = []
+    class_entries: list[dict[str, Any]] = []
     used_bases: set[str] = set()
     core_helpers: set[str] = set()
     kept_items: list[ManifestItem] = []
+    names_in_module: set[str] = set()
     for item in manifest_items:
         try:
             metadata = metadata_repo.get(item.class_name)
@@ -1118,13 +1203,23 @@ def _render_module(
         rendered, base_class, has_payload = renderer.render()
         if not has_payload:
             continue
-        class_definitions.append(rendered)
+        names_in_module.add(item.python_name)
+        class_entries.append({"name": item.python_name, "base": base_class, "source": rendered})
         kept_items.append(item)
         if base_class:
             used_bases.add(base_class)
         core_helpers.update(renderer.core_helpers())
 
+    for entry in class_entries:
+        if entry["base"] not in names_in_module:
+            entry["base"] = None
+    ordered_entries = _order_class_entries(class_entries)
+    class_definitions = [entry["source"] for entry in ordered_entries]
+    ordered_names = [entry["name"] for entry in ordered_entries]
+    order_index = {name: idx for idx, name in enumerate(ordered_names)}
+    kept_items.sort(key=lambda item: order_index.get(item.python_name, len(order_index)))
     class_blob = "\n\n".join(class_definitions)
+
     used_value_type_keys: list[str] = []
     if not skip_value_types:
         for key in resolver.value_types:
@@ -1326,6 +1421,41 @@ def _render_value_types(value_types: Sequence[str]) -> str:
         )
         blocks.append("")
     return "\n".join(blocks)
+
+
+def _order_class_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not entries:
+        return []
+    name_to_entry = {entry['name']: entry for entry in entries}
+    graph: dict[str, list[str]] = {name: [] for name in name_to_entry}
+    indegree: dict[str, int] = {name: 0 for name in name_to_entry}
+
+    for entry in entries:
+        base = entry.get('base')
+        if base in name_to_entry:
+            graph.setdefault(base, []).append(entry['name'])
+            indegree[entry['name']] = indegree.get(entry['name'], 0) + 1
+        graph.setdefault(entry['name'], [])
+        indegree.setdefault(entry['name'], indegree.get(entry['name'], 0))
+
+    queue = deque([name for name, deg in indegree.items() if deg == 0])
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    while queue:
+        name = queue.popleft()
+        if name in name_to_entry and name not in seen:
+            ordered.append(name_to_entry[name])
+        seen.add(name)
+        for child in graph.get(name, []):
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                queue.append(child)
+
+    for entry in entries:
+        if entry['name'] not in seen:
+            ordered.append(entry)
+    return ordered
 
 
 def _render_dependency_imports(resolver: TypeResolver, category: str | None) -> str:

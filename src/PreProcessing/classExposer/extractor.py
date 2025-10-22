@@ -42,12 +42,13 @@ def _default_febio_include_dirs() -> list[Path]:
 
 
 MANIFEST_CATEGORY_DEFAULTS: dict[str, tuple[str | None, str | None]] = {
-    "materials": ("material", "Materials"),
     "material": ("material", "Materials"),
     "core": (None, None),
     "boundaryconditions": ("bc", "Boundary Conditions"),
     "loads": ("load", "Loads"),
     "constraints": ("constraint", "Constraints"),
+    "solver": (None, None),
+    "control": (None, None),
 }
 
 
@@ -187,7 +188,111 @@ def _decode_c_string(literal: str) -> str:
         return literal
 
 
+def _normalise_cpp_class_name(ctype: str | None) -> str | None:
+    if not ctype:
+        return None
+    cleaned = (
+        ctype.replace("*", "")
+        .replace("&", "")
+        .replace("const", "")
+        .replace("class", "")
+        .strip()
+    )
+    if not cleaned:
+        return None
+    tokens = cleaned.split()
+    if not tokens:
+        return None
+    return tokens[-1].split("::")[-1]
+
+
+def _extract_enum_tokens_from_text(enum_name: str, text: str) -> list[str] | None:
+    pattern = re.compile(rf"enum\s+(?:class\s+)?{re.escape(enum_name)}\b")
+    for match in pattern.finditer(text):
+        idx = match.end()
+        while idx < len(text) and text[idx].isspace():
+            idx += 1
+        if idx >= len(text) or text[idx] != '{':
+            continue
+        idx += 1
+        depth = 1
+        start = idx
+        while idx < len(text) and depth > 0:
+            char = text[idx]
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+            idx += 1
+        body = text[start : idx - 1]
+        body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+        lines = [re.sub(r"//.*$", "", line) for line in body.splitlines()]
+        cleaned = "\n".join(lines)
+        tokens: list[str] = []
+        for entry in cleaned.split(','):
+            token = entry.strip()
+            if not token:
+                continue
+            if '=' in token:
+                token = token.split('=', 1)[0].strip()
+            if token:
+                token = token.split('::')[-1]
+                tokens.append(token)
+        if tokens:
+            return tokens
+    return None
+
+
+def _parse_flag_value(tokens: list[str]) -> int:
+    total = 0
+    for token in tokens:
+        for part in str(token).split('|'):
+            entry = part.strip()
+            if not entry:
+                continue
+            try:
+                total |= int(entry, 0)
+                continue
+            except ValueError:
+                pass
+            name = entry.split('::')[-1]
+            flag = _PARAM_FLAG_MAP.get(name)
+            if flag is not None:
+                total |= flag
+    return total
+
+
+def _collect_base_defaults(base_class: str, class_map: dict[str, ClassMetadata]) -> dict[str, Any]:
+    defaults: dict[str, Any] = {}
+    seen: set[str] = set()
+    current = base_class
+    while current and current not in seen:
+        seen.add(current)
+        metadata = class_map.get(current)
+        if metadata is None:
+            break
+        for param in metadata.params:
+            member = param.member
+            if not member:
+                continue
+            if member not in defaults and param.default is not None:
+                defaults[member] = param.default
+        current = metadata.base_class
+    return defaults
+
+
 _REGISTRATION_CACHE: dict[str, str] | None = None
+
+_PARAM_FLAG_MAP = {
+    "FE_PARAM_ATTRIBUTE": 0x01,
+    "FE_PARAM_USER": 0x02,
+    "FE_PARAM_HIDDEN": 0x04,
+    "FE_PARAM_ADDLC": 0x08,
+    "FE_PARAM_VOLATILE": 0x10,
+    "FE_PARAM_TOPLEVEL": 0x20,
+    "FE_PARAM_WATCH": 0x40,
+    "FE_PARAM_OBSOLETE": 0x80,
+}
 
 
 def _load_global_registration_map() -> dict[str, str]:
@@ -418,6 +523,7 @@ class ParameterInfo:
     long_name: str | None
     units: str | None
     definition: list[dict[str, Any]] | None
+    hidden: bool = False
 
     def to_json(self) -> dict[str, Any]:
         """Serialise the parameter.
@@ -442,6 +548,8 @@ class ParameterInfo:
         }
         if self.definition is not None:
             data["definition"] = self.definition
+        if self.hidden:
+            data["hidden"] = True
         return data
 
 
@@ -716,6 +824,57 @@ def _parse_initializer_defaults(serialised: str) -> dict[str, int | float | str 
     return defaults
 
 
+
+def _extract_constructor_defaults(text: str, class_name: str) -> dict[str, int | float | str | bool]:
+    """Gather default member assignments for ``class_name`` from ``text``."""
+
+    pattern = re.compile(
+        rf"{re.escape(class_name)}::\s*{re.escape(class_name)}\s*\([^)]*\)",
+        re.MULTILINE,
+    )
+    defaults: dict[str, int | float | str | bool] = {}
+    for match in pattern.finditer(text):
+        idx = match.end()
+        while idx < len(text) and text[idx].isspace():
+            idx += 1
+        initializer_blob = ""
+        if idx < len(text) and text[idx] == ':':
+            idx += 1
+            init_start = idx
+            depth = 0
+            while idx < len(text):
+                char = text[idx]
+                if char == '{' and depth == 0:
+                    break
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+                idx += 1
+            initializer_blob = text[init_start:idx].strip()
+        body_defaults = {}
+        if idx < len(text) and text[idx] == '{':
+            brace_start = idx
+            depth = 0
+            while idx < len(text):
+                char = text[idx]
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        idx += 1
+                        break
+                idx += 1
+            body = text[brace_start + 1 : idx - 1]
+            body_defaults = _parse_body_defaults(_remove_cpp_comments(body))
+        init_defaults = _parse_initializer_defaults(initializer_blob) if initializer_blob else {}
+        combined = {**init_defaults, **body_defaults}
+        defaults.update(combined)
+    return defaults
+
+
+
 def _parse_body_defaults(body: str) -> dict[str, int | float | str | bool]:
     """Extract simple member assignments from a constructor body."""
 
@@ -760,7 +919,7 @@ def _parse_body_defaults(body: str) -> dict[str, int | float | str | bool]:
     return defaults
 
 
-def _extract_constructor_defaults(text: str, class_name: str) -> dict[str, int | float | str | bool]:
+def _extract_combined_defaults(text: str, class_name: str) -> dict[str, int | float | str | bool]:
     """Gather default member assignments for ``class_name`` from ``text``."""
 
     pattern = re.compile(
@@ -1103,6 +1262,11 @@ class FEBioExtractor:
             for match in register_pattern.finditer(text)
         }
         global_registration = _load_global_registration_map()
+        local_includes = list(includes)
+        local_includes.append(str(cpp_path))
+        header_candidate = cpp_path.with_suffix(".h")
+        if header_candidate.exists():
+            local_includes.append(str(header_candidate))
         for match in pattern.finditer(text):
             class_name, base_class = match.groups()
             if class_name in class_map:
@@ -1115,11 +1279,13 @@ class FEBioExtractor:
             lines = [line.strip() for line in clean_block.splitlines() if line.strip()]
             parameters: list[ParameterInfo] = []
             members = members_map.get(class_name, {})
-            constructor_defaults = _extract_constructor_defaults(text, class_name)
+            combined_defaults = _extract_constructor_defaults(text, class_name)
+            for member, value in _collect_base_defaults(base_class, class_map).items():
+                combined_defaults.setdefault(member, value)
             for line in lines:
                 if "ADD_PARAMETER" in line or "ADD_PROPERTY" in line:
                     parsed = self._parse_macro_line(
-                        line, members, includes, class_map, constructor_defaults
+                        line, members, local_includes, class_map, combined_defaults
                     )
                     if parsed:
                         parameters.append(parsed)
@@ -1168,36 +1334,48 @@ class FEBioExtractor:
             supported macro invocation.
         """
         chain_calls: list[MacroChainCall] = []
-        macro_call = line
-        if "->" in line:
-            segments = line.split("->")
-            macro_call, chained = segments[0], segments[1:]
-            for fragment in chained:
-                fragment_clean = fragment.strip().rstrip(";")
-                name_match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", fragment_clean)
-                if not name_match:
-                    continue
-                func = name_match.group(1)
-                open_idx = fragment_clean.find("(", name_match.end(0))
-                if open_idx == -1:
-                    continue
-                close_idx = _find_matching_paren(fragment_clean, open_idx)
-                if close_idx == -1:
-                    continue
-                args_blob = fragment_clean[open_idx + 1 : close_idx]
-                chain_calls.append(
-                    MacroChainCall(
-                        func=func,
-                        args=[arg.strip() for arg in _split_args(args_blob)],
-                    )
-                )
-        match = re.match(r"(ADD_PARAMETER|ADD_PROPERTY)\s*\((.*)\)", macro_call)
-        if not match:
+        prefix_match = re.match(r"(ADD_PARAMETER|ADD_PROPERTY)\s*\(", line)
+        if not prefix_match:
             return None
-        macro, arguments_blob = match.groups()
+        macro = prefix_match.group(1)
+        open_idx = prefix_match.end() - 1
+        close_idx = _find_matching_paren(line, open_idx)
+        if close_idx == -1:
+            return None
+        arguments_blob = line[open_idx + 1 : close_idx]
+        postamble = line[close_idx + 1 :].strip().rstrip(";")
+        while postamble.startswith("->"):
+            postamble = postamble[2:].strip()
+            name_match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", postamble)
+            if not name_match:
+                break
+            func = name_match.group(1)
+            open_idx = postamble.find("(", name_match.end(0))
+            if open_idx == -1:
+                break
+            close_idx = _find_matching_paren(postamble, open_idx)
+            if close_idx == -1:
+                break
+            args_blob = postamble[open_idx + 1 : close_idx]
+            chain_calls.append(
+                MacroChainCall(
+                    func=func,
+                    args=[arg.strip() for arg in _split_args(args_blob)],
+                )
+            )
+            postamble = postamble[close_idx + 1 :].strip().lstrip(";").strip()
+
         arguments = [_arg.strip() for _arg in _split_args(arguments_blob)]
         member = arguments[0].strip() if arguments else None
         ctype = members.get(member) if member else None
+        nested_param: ParameterInfo | None = None
+        if member and "->" in member:
+            base_member, attr_member = [part.strip() for part in member.split("->", 1)]
+            nested_param = self._resolve_nested_parameter(
+                members.get(base_member), attr_member, includes, class_map
+            )
+            if nested_param and ctype is None:
+                ctype = nested_param.ctype
 
         default: int | float | str | bool | None = None
         strings: list[str] = []
@@ -1207,10 +1385,13 @@ class FEBioExtractor:
         enum_values: list[str] | None = None
         long_name: str | None = None
         units: str | None = None
+        hidden = False
 
         if macro == "ADD_PARAMETER":
             if member and defaults:
                 default = defaults.get(member)
+            if default is None and nested_param:
+                default = nested_param.default
             for argument in arguments[1:]:
                 if "FE_RANGE_" in argument:
                     parsed_range = _parse_fe_range(argument, argument.find("FE_RANGE_"))
@@ -1223,6 +1404,9 @@ class FEBioExtractor:
                     continue
             if strings:
                 human_name = strings[0]
+            if not strings and nested_param and nested_param.name:
+                human_name = nested_param.name
+                strings.append(nested_param.name)
             for literal in strings[1:]:
                 decoded_literal = _decode_c_string(literal)
                 if "\0" in decoded_literal:
@@ -1244,6 +1428,27 @@ class FEBioExtractor:
                     long_name = call.args[0].strip('"')
                 if call.func == "setUnits" and call.args:
                     units = call.args[0]
+            if nested_param:
+                if nested_param.range and range_info is None:
+                    range_info = nested_param.range
+                nested_enum = nested_param.enum
+                if nested_enum and not enum_values:
+                    enum_values = (
+                        nested_enum if isinstance(nested_enum, list) else [nested_enum]
+                    )
+                if nested_param.long_name and not long_name:
+                    long_name = nested_param.long_name
+                if nested_param.units and not units:
+                    units = nested_param.units
+            if (
+                not enum_values
+                and isinstance(default, str)
+                and "::" in default
+            ):
+                enum_name = default.split("::", 1)[0].split()[-1]
+                tokens = self._resolve_enum_tokens(enum_name, includes, class_map)
+                if tokens:
+                    enum_values = tokens
         elif macro == "ADD_PROPERTY":
             for argument in arguments[1:]:
                 if argument.startswith('"') and argument.endswith('"'):
@@ -1270,6 +1475,7 @@ class FEBioExtractor:
             long_name=long_name,
             units=units,
             definition=definition,
+            hidden=hidden,
         )
 
     # ------------------------------------------------------------------
@@ -1305,6 +1511,105 @@ class FEBioExtractor:
             if include_path.stem == clean and include_path.exists():
                 extracted = self._inspect_file_recursive(include_path, class_map)
                 return [entry.to_json() for entry in extracted]
+        return None
+
+    def _resolve_nested_parameter(
+        self,
+        pointer_type: str | None,
+        attr_member: str,
+        includes: Sequence[str],
+        class_map: dict[str, ClassMetadata],
+    ) -> ParameterInfo | None:
+        if not pointer_type or not attr_member:
+            return None
+        target_class = _normalise_cpp_class_name(pointer_type)
+        if not target_class:
+            return None
+        metadata = class_map.get(target_class)
+        header_path: Path | None = None
+        if metadata is None:
+            for include in includes:
+                include_path = Path(include)
+                if include_path.stem != target_class or not include_path.exists():
+                    continue
+                header_path = include_path
+                extracted = self._inspect_file_recursive(include_path, class_map)
+                for entry in extracted:
+                    class_map.setdefault(entry.class_name, entry)
+                metadata = class_map.get(target_class)
+                if metadata:
+                    break
+        if metadata is None:
+            try_paths = list(FEBIO_ROOT.rglob(f"{target_class}.h"))
+            for candidate in try_paths:
+                header_path = candidate
+                extracted = self._inspect_file_recursive(candidate, class_map)
+                for entry in extracted:
+                    class_map.setdefault(entry.class_name, entry)
+                metadata = class_map.get(target_class)
+                if metadata:
+                    break
+        if metadata is not None:
+            for param in metadata.params:
+                if param.member == attr_member:
+                    return param
+
+        header_ctype = None
+        if header_path and header_path.exists():
+            text = header_path.read_text(errors="ignore")
+            pattern = re.compile(rf"([A-Za-z0-9_:<>]+)\s+{re.escape(attr_member)}\s*;")
+            match = pattern.search(text)
+            if match:
+                header_ctype = match.group(1)
+
+        try_paths_cpp = list(FEBIO_ROOT.rglob(f"{target_class}.cpp"))
+        defaults_map: dict[str, Any] = {}
+        for candidate in try_paths_cpp:
+            text = candidate.read_text(errors="ignore")
+            defaults_map.update(_extract_constructor_defaults(text, target_class))
+        default_value = defaults_map.get(attr_member)
+        if default_value is None and not header_ctype:
+            return None
+        return ParameterInfo(
+            macro="ADD_PARAMETER",
+            args=[],
+            member=attr_member,
+            ctype=header_ctype,
+            chain=[],
+            default=default_value,
+            strings=[attr_member],
+            range=None,
+            name=attr_member,
+            enum=None,
+            long_name=None,
+            units=None,
+            definition=None,
+        )
+
+    def _resolve_enum_tokens(
+        self, enum_name: str, includes: Sequence[str], class_map: dict[str, ClassMetadata]
+    ) -> list[str] | None:
+        for include in includes:
+            include_path = Path(include)
+            if include_path.exists():
+                try:
+                    tokens = _extract_enum_tokens_from_text(
+                        enum_name, include_path.read_text(errors="ignore")
+                    )
+                except OSError:
+                    tokens = None
+                if tokens:
+                    return tokens
+        try_paths = list(FEBIO_ROOT.rglob(f"{enum_name}.h"))
+        for candidate in try_paths:
+            try:
+                tokens = _extract_enum_tokens_from_text(
+                    enum_name, candidate.read_text(errors="ignore")
+                )
+            except OSError:
+                tokens = None
+            if tokens:
+                return tokens
         return None
 
 

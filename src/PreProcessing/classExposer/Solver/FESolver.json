@@ -1,0 +1,113 @@
+[
+  {
+    "class": "FESolver",
+    "base": "FECoreBase",
+    "registration": null,
+    "params": [
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_msymm",
+          "\"symmetric_stiffness\"",
+          "0",
+          "\"non-symmetric\\0symmetric\\0symmetric structure\\0preferred\\0\""
+        ],
+        "chain": [
+          {
+            "func": "setLongName",
+            "args": [
+              "\"matrix format\""
+            ]
+          }
+        ],
+        "member": "m_msymm",
+        "ctype": "int",
+        "default": "REAL_SYMMETRIC",
+        "strings": [
+          "symmetric_stiffness",
+          "non-symmetric\\0symmetric\\0symmetric structure\\0preferred\\0"
+        ],
+        "range": null,
+        "name": "symmetric_stiffness",
+        "enum": [
+          "non-symmetric",
+          "symmetric",
+          "symmetric structure",
+          "preferred"
+        ],
+        "long_name": "matrix format",
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_eq_scheme",
+          "\"equation_scheme\"",
+          "0",
+          "\"staggered\\0block\\0\""
+        ],
+        "chain": [],
+        "member": "m_eq_scheme",
+        "ctype": "int",
+        "default": "EQUATION_SCHEME::STAGGERED",
+        "strings": [
+          "equation_scheme",
+          "staggered\\0block\\0"
+        ],
+        "range": null,
+        "name": "equation_scheme",
+        "enum": [
+          "staggered",
+          "block"
+        ],
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_eq_order",
+          "\"equation_order\"",
+          "0",
+          "\"default\\0reverse\\0febio2\\0\""
+        ],
+        "chain": [],
+        "member": "m_eq_order",
+        "ctype": "int",
+        "default": "EQUATION_ORDER::NORMAL_ORDER",
+        "strings": [
+          "equation_order",
+          "default\\0reverse\\0febio2\\0"
+        ],
+        "range": null,
+        "name": "equation_order",
+        "enum": [
+          "default",
+          "reverse",
+          "febio2"
+        ],
+        "long_name": null,
+        "units": null
+      },
+      {
+        "macro": "ADD_PARAMETER",
+        "args": [
+          "m_bwopt",
+          "\"optimize_bw\""
+        ],
+        "chain": [],
+        "member": "m_bwopt",
+        "ctype": "bool",
+        "default": false,
+        "strings": [
+          "optimize_bw"
+        ],
+        "range": null,
+        "name": "optimize_bw",
+        "enum": null,
+        "long_name": null,
+        "units": null
+      }
+    ]
+  }
+]
