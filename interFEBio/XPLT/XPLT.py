@@ -1,547 +1,993 @@
+# XPLT.py — FEBio .xplt reader wired to your standalone Mesh class.
+# Mesh API: interFEBio.Mesh.Mesh
+# Enums:    .Enums
+
 from __future__ import annotations
 
-import os
 import struct
-from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import Iterable, List, Dict
 
 import numpy as np
 
-# Project enums
-from .Enums import FEDataType, FEDataDim, Storage_Fmt, Elem_Type, tags
-# New mesh classes
 from interFEBio.Mesh.Mesh import Mesh, NodeArray, ElementArray, SurfaceArray
-
+from .Enums import (
+    FEDataType,
+    FEDataDim,
+    Storage_Fmt,
+    Elem_Type,
+    nodesPerElementClass,
+    tags,
+)
 
 # ---------------------------------------------------------------------
-# Fast, safe binary block reader
+# Binary reader
 # ---------------------------------------------------------------------
 
-class _Bin:
-    """Minimal FEBio XPLT reader with safe block navigation."""
 
-    __slots__ = ("f", "size")
+class _BinaryReader:
+    """Minimal helper for FEBio tag/size scanning."""
 
-    def __init__(self, path: str) -> None:
-        self.f = open(path, "rb", buffering=1024 * 1024)
-        self.f.seek(0, os.SEEK_END)
-        self.size = self.f.tell()
-        self.f.seek(0)
+    def __init__(self, filename: str):
+        self.file = open(filename, "rb")
+        self.file.seek(0, 2)
+        self.filesize = self.file.tell()
+        self.file.seek(0, 0)
 
-    def close(self) -> None:
-        self.f.close()
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"_BinaryReader(size={self.filesize})"
 
-    def tell(self) -> int:
-        return self.f.tell()
+    __str__ = __repr__
 
-    def seek(self, off: int, whence: int = os.SEEK_SET) -> None:
-        self.f.seek(off, whence)
+    def read(self, n: int = 4) -> bytes:
+        return self.file.read(n)
 
-    def read_u32(self) -> int:
-        buf = self.f.read(4)
-        if len(buf) < 4:
-            raise EOFError("u32 read past EOF")
-        return struct.unpack("<I", buf)[0]
-
-    def read_f32(self) -> float:
-        buf = self.f.read(4)
-        if len(buf) < 4:
-            raise EOFError("f32 read past EOF")
-        return struct.unpack("<f", buf)[0]
-
-    def read_bytes(self, n: int) -> bytes:
-        return self.f.read(n)
-
-    def _peek_tag(self) -> int:
-        pos = self.f.tell()
-        buf = self.f.read(4)
-        self.f.seek(pos)
-        if len(buf) < 4:
+    def search_block(
+        self, BLOCK_TAG: str, max_depth: int = 5, cur_depth: int = 0, print_tag: int = 0
+    ) -> int:
+        if cur_depth == 0:
+            ini_pos = self.file.tell()
+        if cur_depth > max_depth:
+            if cur_depth == 0:
+                self.file.seek(ini_pos, 0)
             return -1
-        return struct.unpack("<I", buf)[0]
+        buf = self.file.read(4)
+        if buf == b"":
+            if cur_depth == 0:
+                self.file.seek(ini_pos, 0)
+            return -1
+        cur_id = struct.unpack("I", buf)[0]
+        size = struct.unpack("I", self.file.read(4))[0]
+        if int(tags[BLOCK_TAG].value, 16) == cur_id:
+            if print_tag:
+                print(BLOCK_TAG)
+            return size
+        self.file.seek(size, 1)
+        d = self.search_block(BLOCK_TAG, max_depth, cur_depth + 1, print_tag)
+        if d == -1 and cur_depth == 0:
+            self.file.seek(ini_pos, 0)
+        return d
 
-    def check_block(self, want: str) -> bool:
-        peek = self._peek_tag()
-        if peek < 0:
-            return False
-        return int(tags[want].value, 16) == peek
+    def check_block(self, BLOCK_TAG: str, filesize: int = -1) -> int:
+        if filesize > 0 and self.file.tell() + 4 > filesize:
+            return 0
+        buf = struct.unpack("I", self.file.read(4))[0]
+        self.file.seek(-4, 1)
+        return 1 if int(tags[BLOCK_TAG].value, 16) == buf else 0
 
-    def next_block(self, want: str) -> int:
-        """Scan forward to block. Leave cursor at tag start. Return payload size or -1."""
-        want_id = int(tags[want].value, 16)
-        start = self.f.tell()
-        while True:
-            hdr = self.f.read(8)
-            if not hdr:
-                self.f.seek(start)
-                return -1
-            tag_id, sz = struct.unpack("<II", hdr)
-            if tag_id == want_id:
-                self.f.seek(-8, os.SEEK_CUR)
-                return sz
-            self.f.seek(sz, os.SEEK_CUR)
-
-    def enter(self, want: str) -> int:
-        """Enter a block and return its payload size. Cursor at payload start."""
-        tag_id = self.read_u32()
-        if tag_id != int(tags[want].value, 16):
-            raise RuntimeError(f"Expected block {want}")
-        return self.read_u32()
-
-    def skip(self, n: int) -> None:
-        self.f.seek(n, os.SEEK_CUR)
+    def seek_block(self, BLOCK_TAG: str) -> int:
+        if int(tags[BLOCK_TAG].value, 16) == struct.unpack("I", self.file.read(4))[0]:
+            pass
+        size = struct.unpack("I", self.file.read(4))[0]
+        return size
 
 
 # ---------------------------------------------------------------------
-# Results model with chainable selectors and pretty printing
+# Field meta
 # ---------------------------------------------------------------------
 
-@dataclass
-class _Field:
-    """Result variable across domains and time."""
-    name: str
-    fmt: str                  # "NODE" | "ITEM" | "SURFACE"
-    comp: int                 # components per item
-    times: np.ndarray         # (T,)
-    data: List[np.ndarray]    # per-domain: (T, n_items, comp)
-    gidx: List[np.ndarray]    # per-domain: global ids
-    domains: List[str]        # per-domain names
 
-    def last(self) -> "_View":
-        return _View(self, -1, None)
+class _FieldMeta:
+    """Dictionary entry materialized for faster access."""
 
-    def at(self, tsel: int | slice | Sequence[int]) -> "_View":
-        return _View(self, tsel, None)
+    __slots__ = ("name", "fmt", "dtype", "ncomp")
 
-    def domain(self, dsel: str | int | Sequence[str | int]) -> "_View":
-        return _View(self, slice(None), dsel)
+    def __init__(self, name: str, fmt: Storage_Fmt, dtype: FEDataType):
+        self.name = name
+        self.fmt = fmt
+        self.dtype = dtype
+        self.ncomp = int(FEDataDim[dtype.name].value)
 
-    def __getitem__(self, t: int | slice) -> "_View":
-        return self.at(t)
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"_FieldMeta(name={self.name!r}, fmt={self.fmt.name}, dtype={self.dtype.name}, ncomp={self.ncomp})"
 
-    def __repr__(self) -> str:
-        T = int(self.times.size)
-        doms = ", ".join(f"{nm}:{self.data[i].shape[1]}" for i, nm in enumerate(self.domains))
-        return f"<Field {self.name!r} fmt={self.fmt} comp={self.comp} T={T} domains=[{doms}]>"
+    __str__ = __repr__
 
 
-class Results(Mapping[str, _Field]):
-    """Dictionary-like results container with nice summaries."""
+# ---------------------------------------------------------------------
+# Component string mapping
+# ---------------------------------------------------------------------
 
-    def __init__(self, fields: Dict[str, _Field] | None = None) -> None:
-        self._fields: Dict[str, _Field] = {} if fields is None else dict(fields)
+Index = int | slice | Iterable[int] | np.ndarray | None
 
-    # Mapping interface
-    def __getitem__(self, key: str) -> _Field:
-        return self._fields[key]
+_VEC3_ORDER = ("x", "y", "z")
+_MAT3FD_ORDER = ("xx", "yy", "zz")
+# Symmetric 2nd-order: 6 components (Voigt-like)
+_MAT3FS_ORDER = ("xx", "yy", "zz", "xy", "yz", "xz")
+# Full 3x3 row-major
+_MAT3F_ORDER = ("xx", "xy", "xz", "yx", "yy", "yz", "zx", "zy", "zz")
+# Voigt pairs for 4th-order symmetric tensor: 6 base pairs
+_VOIGT6 = {"xx": 0, "yy": 1, "zz": 2, "yz": 3, "xz": 4, "xy": 5}
 
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._fields)
+
+def _normalize_comp_token(s: str) -> str:
+    return s.strip().lower().replace(" ", "")
+
+
+def _comp_names_for_dtype(dtype: FEDataType) -> tuple[str, ...] | None:
+    if dtype == FEDataType.VEC3F:
+        return _VEC3_ORDER
+    if dtype == FEDataType.MAT3FD:
+        return _MAT3FD_ORDER
+    if dtype == FEDataType.MAT3FS:
+        return _MAT3FS_ORDER
+    if dtype == FEDataType.MAT3F:
+        return _MAT3F_ORDER
+    return None  # TENS4FS handled separately
+
+
+def _tens4fs_pair_index(p: str) -> int:
+    p = _normalize_comp_token(p)
+    if len(p) != 4:
+        raise KeyError(
+            f"invalid 4th-order token '{p}', use pairs like 'xxyy','xyxy','yzyz'"
+        )
+    a = p[:2]
+    b = p[2:]
+    if a not in _VOIGT6 or b not in _VOIGT6:
+        raise KeyError(f"invalid pair in '{p}'")
+    i, j = _VOIGT6[a], _VOIGT6[b]
+    if i > j:
+        i, j = j, i
+    return i + (j * (j + 1)) // 2  # 0..20
+
+
+def _comp_spec_to_index(meta: _FieldMeta, spec: Index | str | Iterable[str]) -> Index:
+    if spec is None:
+        return None
+    if isinstance(spec, (int, slice, np.ndarray)):
+        return spec
+    if isinstance(spec, str):
+        s = _normalize_comp_token(spec)
+        if s == ":":
+            return slice(None)
+        names = _comp_names_for_dtype(meta.dtype)
+        if names is not None:
+            try:
+                return names.index(s)
+            except ValueError:
+                raise KeyError(
+                    f"component '{spec}' not valid for {meta.dtype.name}. Valid: {names}"
+                )
+        if meta.dtype == FEDataType.TENS4FS:
+            return _tens4fs_pair_index(s)
+        raise KeyError(f"component strings not supported for {meta.dtype.name}")
+    # list/tuple of strings
+    try:
+        lst = list(spec)  # type: ignore[arg-type]
+    except TypeError:
+        raise TypeError("unsupported component selector")
+    out: List[int] = []
+    for item in lst:
+        if not isinstance(item, str):
+            raise TypeError("component list must be strings")
+        idx_item = _comp_spec_to_index(meta, item)
+        if isinstance(idx_item, int):
+            out.append(idx_item)
+        else:
+            raise TypeError("component list does not accept slices")
+    return np.asarray(out, dtype=np.int64)
+
+
+# ---------------------------------------------------------------------
+# Results views with NaN-filling for missing states
+# ---------------------------------------------------------------------
+
+
+def _as_index_list(sel: Index, T: int) -> List[int]:
+    if sel is None:
+        return list(range(T))
+    if isinstance(sel, int):
+        return [sel]
+    if isinstance(sel, slice):
+        return list(range(T))[sel]
+    if isinstance(sel, np.ndarray) and sel.dtype == bool:
+        return list(np.nonzero(sel)[0].tolist())
+    return list(sel)  # type: ignore[arg-type]
+
+
+def _shape_from_slice(n: int, s: Index) -> int:
+    if s is None:
+        return n
+    if isinstance(s, int):
+        return 1
+    if isinstance(s, slice):
+        start, stop, step = s.indices(n)
+        return max(0, (stop - start + (step - 1)) // step)
+    return len(list(s))  # type: ignore[arg-type]
+
+
+class _BaseView:
+    """Common helpers for labeled selection."""
+
+    __slots__ = ("meta", "_times", "_comp_idx", "_t_idx")
+
+    def __init__(self, meta: _FieldMeta, times: np.ndarray):
+        self.meta = meta
+        self._times = np.asarray(times, float)
+        self._comp_idx: Index = None
+        self._t_idx: Index = None
+
+    # labeled selector; accepts ":" string
+    def time(self, idx: Index | str = None):
+        if idx == ":":
+            idx = slice(None)
+        self._t_idx = idx  # type: ignore[assignment]
+        return self
+
+    # TERMINAL
+    def comp(self, idx: Index | str | Iterable[str]):
+        self._comp_idx = _comp_spec_to_index(self.meta, idx)
+        return self.eval()
+
+    def dims(self) -> tuple[str, ...]:
+        raise NotImplementedError
+
+    def explain(self) -> str:  # pragma: no cover
+        d = ", ".join(self.dims())
+        return f"{self.meta.name}: dims=({d})"
 
     def __len__(self) -> int:
-        return len(self._fields)
-
-    # Mutator for internal use
-    def _set(self, key: str, value: _Field) -> None:
-        self._fields[key] = value
-
-    def keys(self) -> Iterable[str]:  # type: ignore[override]
-        return self._fields.keys()
-
-    def __repr__(self) -> str:
-        lines = ["<Results:"]
-        for k, f in self._fields.items():
-            T = int(f.times.size)
-            ndoms = len(f.domains)
-            lines.append(f"  - {k}  fmt={f.fmt}  comp={f.comp}  T={T}  domains={ndoms}")
-        lines.append(">")
-        return "\n".join(lines)
+        return self._times.shape[0]
 
 
-@dataclass
-class _View:
-    """Time and domain selection view."""
-    field: _Field
-    tsel: int | slice | Sequence[int]
-    dsel: str | int | Sequence[str | int] | None
+class NodeResultView(_BaseView):
+    """Nodal results with NaN-filling; dims = (time, node, component)."""
 
-    def _domain_indices(self) -> List[int]:
-        if self.dsel is None:
-            return list(range(len(self.field.data)))
-        if isinstance(self.dsel, (str, int)):
-            s = str(self.dsel)
-            return [i for i, nm in enumerate(self.field.domains) if nm == s or str(i) == s]
-        want = {str(x) for x in self.dsel}
-        return [i for i, nm in enumerate(self.field.domains) if nm in want or str(i) in want]
+    __slots__ = ("_per_t", "_mesh", "_node_idx")
 
-    def _stack(self) -> Tuple[np.ndarray, np.ndarray]:
-        didx = self._domain_indices()
-        chunks, gids = [], []
-        for i in didx:
-            chunks.append(self.field.data[i][self.tsel])  # (T?, n_items, comp) or (n_items, comp)
-            gids.append(self.field.gidx[i])
-        return np.concatenate(chunks, axis=-2), np.concatenate(gids, axis=0)
+    def __init__(
+        self,
+        meta: _FieldMeta,
+        times: np.ndarray,
+        per_t: List[np.ndarray | None],
+        mesh: Mesh,
+    ):
+        super().__init__(meta, times)
+        self._per_t = per_t
+        self._mesh = mesh
+        self._node_idx: Index = None
 
-    def nodal(self, mesh: Mesh) -> np.ndarray:
-        if self.field.fmt != "NODE":
-            raise ValueError("Not a nodal field")
-        vals, gids = self._stack()
-        N = mesh.nnodes
-        if vals.ndim == 2:
-            out = np.zeros((N, vals.shape[-1]), vals.dtype); out[gids] = vals; return out
-        T = vals.shape[0]
-        out = np.zeros((T, N, vals.shape[-1]), vals.dtype); out[:, gids, :] = vals; return out
+    def nodes(self, ids: Index):  # fluent
+        self._node_idx = ids
+        return self
 
-    def elements(self, mesh: Mesh) -> np.ndarray:
-        if self.field.fmt != "ITEM":
-            raise ValueError("Not an element field")
-        vals, gids = self._stack()
-        E = mesh.nelems
-        if vals.ndim == 2:
-            out = np.zeros((E, vals.shape[-1]), vals.dtype); out[gids] = vals; return out
-        T = vals.shape[0]
-        out = np.zeros((T, E, vals.shape[-1]), vals.dtype); out[:, gids, :] = vals; return out
+    def nodeset(self, name: str):  # fluent
+        self._node_idx = self._mesh.nodesets[name]
+        return self
 
-    def raw(self) -> List[np.ndarray]:
-        out: List[np.ndarray] = []
-        for i in self._domain_indices():
-            out.append(self.field.data[i][self.tsel])
-        return out
+    def dims(self) -> tuple[str, ...]:
+        return ("time", "node", "component")
+
+    def eval(self) -> np.ndarray:
+        T_sel = _as_index_list(self._t_idx, len(self))
+        N0 = next((a.shape[0] for a in self._per_t if a is not None), 0)
+        C0 = self.meta.ncomp
+        N_sel = _shape_from_slice(N0, self._node_idx)
+        C_sel = _shape_from_slice(C0, self._comp_idx)
+
+        def _one(k: int) -> np.ndarray:
+            a = self._per_t[k]
+            if a is None:
+                return np.full((N_sel, C_sel), np.nan, dtype=np.float32)
+            out = a
+            if self._node_idx is not None:
+                out = out[self._node_idx, :]  # type: ignore[index]
+            if self._comp_idx is not None:
+                out = out[..., self._comp_idx]  # type: ignore[index]
+            out = np.asarray(out, dtype=np.float32)
+            if out.ndim == 1:
+                out = out.reshape(1, -1) if N_sel == 1 else out.reshape(-1, 1)
+            return out
+
+        if len(T_sel) == 1 and isinstance(self._t_idx, int):
+            return _one(T_sel[0])
+        return np.stack([_one(k) for k in T_sel], axis=0)
+
+    # direct slicing: v[t, n, c] -> ndarray
+    def __getitem__(self, key):
+        if not isinstance(key, tuple):
+            t = key
+            self._t_idx = t if t != ":" else slice(None)  # type: ignore[assignment]
+            self._node_idx = None
+            self._comp_idx = None
+            return self.eval()
+        # pad to (t, n, c)
+        t, n, c = (key + (slice(None),) * 3)[:3]
+        if t == ":":
+            t = slice(None)
+        if n == ":":
+            n = slice(None)
+        if isinstance(c, str):
+            c = _comp_spec_to_index(self.meta, c)
+        self._t_idx = t  # type: ignore[assignment]
+        self._node_idx = n  # type: ignore[assignment]
+        self._comp_idx = c  # type: ignore[assignment]
+        return self.eval()
+
+    # legacy
+    def at(self, t: Index) -> np.ndarray:
+        return self.time(t).eval()
+
+    def __repr__(self) -> str:  # pragma: no cover
+        N = next((a.shape[0] for a in self._per_t if a is not None), 0)
+        C = next((a.shape[1] for a in self._per_t if a is not None), self.meta.ncomp)
+        missing = sum(1 for a in self._per_t if a is None)
+        return f"NodeResultView(name={self.meta.name!r}, T={len(self)}, N={N}, C={C}, missing={missing})"
+
+    __str__ = __repr__
+
+
+class ElemResultView(_BaseView):
+    """Element results; dims = (time, element, component)."""
+
+    __slots__ = ("_per_name", "_elem_idx")
+
+    def __init__(
+        self,
+        meta: _FieldMeta,
+        times: np.ndarray,
+        per_name: Dict[str, List[np.ndarray | None]],
+    ):
+        super().__init__(meta, times)
+        self._per_name = per_name
+        self._elem_idx: Index = None
+
+    def domains(self) -> List[str]:
+        return sorted(self._per_name.keys())
+
+    def domain(self, name: str):
+        if name not in self._per_name:
+            raise KeyError(name)
+        return ElemResultView(self.meta, self._times, {name: self._per_name[name]})
+
+    def elems(self, ids: Index):
+        self._elem_idx = ids
+        return self
+
+    def dims(self) -> tuple[str, ...]:
+        return ("time", "element", "component")
+
+    def _pick_per_t(self) -> List[np.ndarray | None]:
+        if len(self._per_name) != 1:
+            raise ValueError("multiple domains present; select a domain() first")
+        return next(iter(self._per_name.values()))
+
+    def eval(self, *, domain: str | None = None) -> np.ndarray:
+        per_t = self._pick_per_t() if domain is None else self._per_name[domain]
+        T_sel = _as_index_list(self._t_idx, len(self))
+        R0 = next((a.shape[0] for a in per_t if a is not None), 0)
+        C0 = self.meta.ncomp
+        R_sel = _shape_from_slice(R0, self._elem_idx)
+        C_sel = _shape_from_slice(C0, self._comp_idx)
+
+        def _one(k: int) -> np.ndarray:
+            a = per_t[k]
+            if a is None:
+                return np.full((R_sel, C_sel), np.nan, dtype=np.float32)
+            out = a
+            if self._elem_idx is not None:
+                out = out[self._elem_idx, :]  # type: ignore[index]
+            if self._comp_idx is not None:
+                out = out[..., self._comp_idx]  # type: ignore[index]
+            out = np.asarray(out, dtype=np.float32)
+            if out.ndim == 1:
+                out = out.reshape(1, -1) if R_sel == 1 else out.reshape(-1, 1)
+            return out
+
+        if len(T_sel) == 1 and isinstance(self._t_idx, int):
+            return _one(T_sel[0])
+        return np.stack([_one(k) for k in T_sel], axis=0)
+
+    # direct slicing: s[t, e, c] -> ndarray (requires single domain view)
+    def __getitem__(self, key):
+        _ = self._pick_per_t()  # validate single-domain
+        if not isinstance(key, tuple):
+            t = key
+            self._t_idx = t if t != ":" else slice(None)  # type: ignore[assignment]
+            self._elem_idx = None
+            self._comp_idx = None
+            return self.eval()
+        t, e, c = (key + (slice(None),) * 3)[:3]
+        if t == ":":
+            t = slice(None)
+        if e == ":":
+            e = slice(None)
+        if isinstance(c, str):
+            c = _comp_spec_to_index(self.meta, c)
+        self._t_idx = t  # type: ignore[assignment]
+        self._elem_idx = e  # type: ignore[assignment]
+        self._comp_idx = c  # type: ignore[assignment]
+        return self.eval()
+
+    # legacy
+    def at(self, t: Index, domain: str | None = None) -> np.ndarray:
+        return self.time(t).eval(domain=domain)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        names = list(self._per_name.keys())
+        return f"ElemResultView(name={self.meta.name!r}, domains={names})"
+
+    __str__ = __repr__
+
+
+class FaceResultView(_BaseView):
+    """Surface results; dims = (time, face, component)."""
+
+    __slots__ = ("_per_name", "_face_idx")
+
+    def __init__(
+        self,
+        meta: _FieldMeta,
+        times: np.ndarray,
+        per_name: Dict[str, List[np.ndarray | None]],
+    ):
+        super().__init__(meta, times)
+        self._per_name = per_name
+        self._face_idx: Index = None
+
+    def surfaces(self) -> List[str]:
+        return sorted(self._per_name.keys())
+
+    def surface(self, name: str):
+        if name not in self._per_name:
+            raise KeyError(name)
+        return FaceResultView(self.meta, self._times, {name: self._per_name[name]})
+
+    def faces(self, ids: Index):
+        self._face_idx = ids
+        return self
+
+    def dims(self) -> tuple[str, ...]:
+        return ("time", "face", "component")
+
+    def _pick_per_t(self) -> List[np.ndarray | None]:
+        if len(self._per_name) != 1:
+            raise ValueError("multiple surfaces present; select a surface() first")
+        return next(iter(self._per_name.values()))
+
+    def eval(self, *, surface: str | None = None) -> np.ndarray:
+        per_t = self._pick_per_t() if surface is None else self._per_name[surface]
+        T_sel = _as_index_list(self._t_idx, len(self))
+        R0 = next((a.shape[0] for a in per_t if a is not None), 0)
+        C0 = self.meta.ncomp
+        R_sel = _shape_from_slice(R0, self._face_idx)
+        C_sel = _shape_from_slice(C0, self._comp_idx)
+
+        def _one(k: int) -> np.ndarray:
+            a = per_t[k]
+            if a is None:
+                return np.full((R_sel, C_sel), np.nan, dtype=np.float32)
+            out = a
+            if self._face_idx is not None:
+                out = out[self._face_idx, :]  # type: ignore[index]
+            if self._comp_idx is not None:
+                out = out[..., self._comp_idx]  # type: ignore[index]
+            out = np.asarray(out, dtype=np.float32)
+            if out.ndim == 1:
+                out = out.reshape(1, -1) if R_sel == 1 else out.reshape(-1, 1)
+            return out
+
+        if len(T_sel) == 1 and isinstance(self._t_idx, int):
+            return _one(T_sel[0])
+        return np.stack([_one(k) for k in T_sel], axis=0)
+
+    # direct slicing: f[t, f, c] -> ndarray (requires single surface view)
+    def __getitem__(self, key):
+        _ = self._pick_per_t()  # validate single-surface
+        if not isinstance(key, tuple):
+            t = key
+            self._t_idx = t if t != ":" else slice(None)  # type: ignore[assignment]
+            self._face_idx = None
+            self._comp_idx = None
+            return self.eval()
+        t, f, c = (key + (slice(None),) * 3)[:3]
+        if t == ":":
+            t = slice(None)
+        if f == ":":
+            f = slice(None)
+        if isinstance(c, str):
+            c = _comp_spec_to_index(self.meta, c)
+        self._t_idx = t  # type: ignore[assignment]
+        self._face_idx = f  # type: ignore[assignment]
+        self._comp_idx = c  # type: ignore[assignment]
+        return self.eval()
+
+    # legacy
+    def at(self, t: Index, surface: str | None = None) -> np.ndarray:
+        return self.time(t).eval(surface=surface)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        names = list(self._per_name.keys())
+        return f"FaceResultView(name={self.meta.name!r}, surfaces={names})"
+
+    __str__ = __repr__
+
+
+class Results:
+    """Registry mapping variable names to views."""
+
+    def __init__(self, times: Iterable[float]):
+        self._times = np.asarray(list(times), float)
+        self._nodal: Dict[str, NodeResultView] = {}
+        self._elem: Dict[str, ElemResultView] = {}
+        self._face: Dict[str, FaceResultView] = {}
+        self._meta: Dict[str, _FieldMeta] = {}
+
+    def __len__(self) -> int:
+        return self._times.shape[0]
+
+    def register_nodal(
+        self, name: str, meta: _FieldMeta, per_t: List[np.ndarray | None], mesh: Mesh
+    ):
+        self._meta[name] = meta
+        self._nodal[name] = NodeResultView(meta, self._times, per_t, mesh)
+
+    def register_elem(
+        self, name: str, meta: _FieldMeta, per_name: Dict[str, List[np.ndarray | None]]
+    ):
+        self._meta[name] = meta
+        self._elem[name] = ElemResultView(meta, self._times, per_name)
+
+    def register_face(
+        self, name: str, meta: _FieldMeta, per_name: Dict[str, List[np.ndarray | None]]
+    ):
+        self._meta[name] = meta
+        self._face[name] = FaceResultView(meta, self._times, per_name)
+
+    def times(self) -> np.ndarray:
+        return self._times
+
+    def __getitem__(self, key: str):
+        if key in self._nodal:
+            return self._nodal[key]
+        if key in self._elem:
+            return self._elem[key]
+        if key in self._face:
+            return self._face[key]
+        raise KeyError(key)
+
+    def keys(self) -> List[str]:
+        return list(self._meta.keys())
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"Results(ntimes={len(self)}, vars={len(self._meta)})"
+
+    __str__ = __repr__
 
 
 # ---------------------------------------------------------------------
-# XPLT reader
+# Main reader
 # ---------------------------------------------------------------------
 
-class Xplt:
-    """Efficient FEBio XPLT reader, compatible with the new Mesh."""
 
-    path: str
-    version: int
-    compression: int
-    dictionary: Dict[str, Dict[str, str]]
-    results: Results
-    mesh: Mesh
-    times: np.ndarray
+class xplt:
+    """Reader for FEBio .xplt with mesh isolation and NaN-filled sparse results."""
 
-    def __init__(self, path: str) -> None:
-        self.path = str(path)
-        self.dictionary = {}
-        self.results = Results()
-        self.times = np.empty((0,), dtype=float)
-        self._read_all(self.path)
+    def __init__(self, filename: str):
+        self.reader = _BinaryReader(filename)
+        self.time: List[float] = []
+        self.readMode = ""
 
-    def __getitem__(self, var: str) -> _Field:
-        return self.results[var]
+        # dictionary + meta
+        self.dictionary: Dict[str, Dict[str, str]] = {}
+        self._field_meta: Dict[str, _FieldMeta] = {}
 
-    def __repr__(self) -> str:
-        nvars = len(self.results)
-        t = int(self.times.size)
-        nn = getattr(self, "mesh", None).nnodes if hasattr(self, "mesh") else 0
-        ne = getattr(self, "mesh", None).nelems if hasattr(self, "mesh") else 0
-        return f"<Xplt file={os.path.basename(self.path)!r} ver=0x{self.version:04x} times={t} nodes={nn} elems={ne} vars={nvars}>"
+        # id maps
+        self._part_id2name: Dict[int, str] = {}
+        self._surf_id2name: Dict[int, str] = {}
 
-    # ---------------- pipeline ----------------
+        # mesh accumulators
+        self._nodes_xyz: np.ndarray | None = None
+        self._conn_list: List[np.ndarray] = []
+        self._etype_list: List[str] = []
+        self._parts_map: Dict[str, List[int]] = {}
+        self._surfaces_map: Dict[str, List[np.ndarray]] = {}
+        self._nodesets_map: Dict[str, np.ndarray] = {}
 
-    def _read_all(self, path: str) -> None:
-        br = _Bin(path)
+        # results accumulators with per-time alignment
+        self._buf_node: Dict[str, List[np.ndarray | None]] = {}
+        self._buf_elem: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
+        self._buf_face: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
 
-        if br.read_u32() != 4605250:
-            br.close()
-            raise RuntimeError("Not a valid XPLT file")
+        # per-state scratch
+        self._state_node_seen: Dict[str, np.ndarray] = {}
+        self._state_elem_seen: Dict[str, Dict[str, np.ndarray]] = {}
+        self._state_face_seen: Dict[str, Dict[str, np.ndarray]] = {}
 
-        br.next_block("PLT_ROOT");            br.enter("PLT_ROOT")
-        br.next_block("PLT_HEADER");          br.enter("PLT_HEADER")
-        br.next_block("PLT_HDR_VERSION");     br.enter("PLT_HDR_VERSION");   self.version = br.read_u32()
-        br.next_block("PLT_HDR_COMPRESSION"); br.enter("PLT_HDR_COMPRESSION"); self.compression = br.read_u32()
+        self._read_xplt()  # header + dictionary + mesh
+        self.mesh = self._build_mesh()
 
-        self._read_dictionary(br)
-        self.mesh = self._read_mesh(br)
-        self._read_parts(br)
-        self._read_states(br)
+        self.version: int
+        self.compression: int
+        self.results: Results = Results([])
 
-        br.close()
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"xplt(v={getattr(self, 'version', 'NA')}, comp={getattr(self, 'compression', 'NA')}, ntimes={len(self.time)}, vars={len(self.dictionary)})"
 
-    # ---------------- dictionary --------------
+    __str__ = __repr__
 
-    def _read_dictionary(self, br: _Bin) -> None:
-        br.next_block("PLT_DICTIONARY"); br.enter("PLT_DICTIONARY")
-        self.dictionary = {}
+    # ------------------ mesh parsing -> Mesh ------------------
 
-        def _stream(tag: str) -> None:
-            if br.next_block(tag) < 0:
-                return
-            br.enter(tag)
-            while br.check_block("PLT_DIC_ITEM"):
-                br.enter("PLT_DIC_ITEM")
-                br.next_block("PLT_DIC_ITEM_TYPE"); br.enter("PLT_DIC_ITEM_TYPE"); itype = br.read_u32()
-                br.next_block("PLT_DIC_ITEM_FMT");  br.enter("PLT_DIC_ITEM_FMT");  ifmt  = br.read_u32()
-                br.next_block("PLT_DIC_ITEM_NAME"); br.enter("PLT_DIC_ITEM_NAME")
-                name = br.read_bytes(64).decode("utf-8", "ignore").split("\x00")[0]
-                self.dictionary[name] = {"type": FEDataType(itype).name, "format": Storage_Fmt(ifmt).name}
-
-        _stream("PLT_DIC_NODAL")
-        _stream("PLT_DIC_DOMAIN")
-        _stream("PLT_DIC_SURFACE")
-
-        for k, meta in self.dictionary.items():
-            comp = FEDataDim[meta["type"]].value
-            self.results._set(k, _Field(
-                name=k,
-                fmt=meta["format"],
-                comp=comp,
-                times=np.empty((0,), dtype=float),
-                data=[],
-                gidx=[],
-                domains=[],
-            ))
-
-    # ---------------- mesh --------------------
-
-    @staticmethod
-    def _etype_str(etype: str) -> str:
-        s = etype.upper().removeprefix("FE_")
-        for p in ("TET", "HEX", "PENTA", "TRI", "QUAD", "LINE"):
-            if s.startswith(p):
-                return p.lower() + s[len(p):].lower()
-        return s.lower()
-
-    def _read_mesh(self, br: _Bin) -> Mesh:
-        br.next_block("PLT_MESH"); br.enter("PLT_MESH")
-
+    def _readMesh(self):
         # Nodes
-        br.next_block("PLT_NODE_SECTION"); br.enter("PLT_NODE_SECTION")
-        br.next_block("PLT_NODE_HEADER");  br.enter("PLT_NODE_HEADER")
-        br.next_block("PLT_NODE_SIZE");    br.enter("PLT_NODE_SIZE"); nnode = br.read_u32()
-        br.next_block("PLT_NODE_DIM");     br.enter("PLT_NODE_DIM");  ndim  = br.read_u32()
-        br.next_block("PLT_NODE_COORDS");  br.enter("PLT_NODE_COORDS")
+        self.reader.search_block("PLT_MESH")
+        self.reader.search_block("PLT_NODE_SECTION")
+        self.reader.search_block("PLT_NODE_HEADER")
+        self.reader.search_block("PLT_NODE_SIZE")
+        nodeSize = int(struct.unpack("I", self.reader.read())[0])
+        self.reader.search_block("PLT_NODE_DIM")
+        nodeDim = int(struct.unpack("I", self.reader.read())[0])
+        self.reader.search_block("PLT_NODE_COORDS")
+        xyz = np.zeros((nodeSize, max(3, nodeDim)), dtype=float)
+        for i in range(nodeSize):
+            _ = struct.unpack("I", self.reader.read())[0]  # node id
+            for j in range(nodeDim):
+                xyz[i, j] = struct.unpack("f", self.reader.read())[0]
+        self._nodes_xyz = xyz
 
-        ids = np.empty((nnode,), dtype=np.int64)
-        xyz = np.zeros((nnode, max(3, ndim)), dtype=np.float32)
-        for i in range(nnode):
-            ids[i] = br.read_u32()
-            xyz[i, 0] = br.read_f32()
-            xyz[i, 1] = br.read_f32()
-            xyz[i, 2] = br.read_f32() if ndim > 2 else 0.0
+        # Domains
+        self.reader.search_block("PLT_DOMAIN_SECTION")
+        while self.reader.check_block("PLT_DOMAIN"):
+            self.reader.search_block("PLT_DOMAIN")
+            self.reader.search_block("PLT_DOMAIN_HDR")
+            self.reader.search_block("PLT_DOM_ELEM_TYPE")
+            et_num = int(struct.unpack("I", self.reader.read())[0])
 
-        order = np.argsort(ids)
-        remap = np.empty(ids.size, dtype=np.int64); remap[order] = np.arange(ids.size)
-        nodes = NodeArray(xyz[order])
+            self.reader.search_block("PLT_DOM_PART_ID")
+            part_id_1b = int(struct.unpack("I", self.reader.read())[0])
+            did = part_id_1b - 1
 
-        # Domains and elements
-        parts: Dict[str, List[int]] = {}
-        conn_list: List[np.ndarray] = []
-        etypes: List[str] = []
+            self.reader.search_block("PLT_DOM_ELEMS")
+            _ = int(struct.unpack("I", self.reader.read())[0])
 
-        if br.next_block("PLT_DOMAIN_SECTION") >= 0:
-            br.enter("PLT_DOMAIN_SECTION")
-            while br.check_block("PLT_DOMAIN"):
-                br.enter("PLT_DOMAIN")
-                br.next_block("PLT_DOMAIN_HDR"); br.enter("PLT_DOMAIN_HDR")
-                br.next_block("PLT_DOM_ELEM_TYPE"); br.enter("PLT_DOM_ELEM_TYPE"); et = Elem_Type(br.read_u32()).name
-                br.next_block("PLT_DOM_PART_ID");  br.enter("PLT_DOM_PART_ID");  pid = br.read_u32()
-                br.next_block("PLT_DOM_ELEMS");    br.enter("PLT_DOM_ELEMS");    nelem = br.read_u32()
-                nlen = br.next_block("PLT_DOM_NAME")
-                dname = None
-                if nlen > 0:
-                    br.enter("PLT_DOM_NAME")
-                    dname = br.read_bytes(nlen).decode("utf-8", "ignore").split("\x00")[-1]
+            nlen = self.reader.search_block("PLT_DOM_NAME")
+            dname = (
+                self.reader.read(nlen).decode("utf-8", errors="ignore")
+                if nlen > 0
+                else None
+            )
+            part_name = dname or f"part_{did}"
+            self._part_id2name[did] = part_name
 
-                br.next_block("PLT_DOM_ELEM_LIST"); br.enter("PLT_DOM_ELEM_LIST")
-                for _ in range(nelem):
-                    sz = br.enter("PLT_ELEMENT")
-                    raw = np.frombuffer(br.read_bytes(sz), dtype="<u4")
-                    conn = remap[raw[1:].astype(np.int64) - 1]
-                    conn_list.append(conn)
-                    etypes.append(self._etype_str(et))
-                parts.setdefault(dname or str(pid), []).append(len(etypes) - 1)
+            self.reader.search_block("PLT_DOM_ELEM_LIST")
+            etype = Elem_Type(et_num).name
+            nne = int(nodesPerElementClass[etype])
 
-        # Elements table (NumPy)
-        kmax = max((len(c) for c in conn_list), default=0)
-        conn = -np.ones((len(conn_list), kmax), dtype=np.int64)
-        nper = np.zeros((len(conn_list),), dtype=np.int64)
-        for i, c in enumerate(conn_list):
+            while self.reader.check_block("PLT_ELEMENT"):
+                _sec = self.reader.search_block("PLT_ELEMENT", print_tag=0)
+                row = np.zeros(nne + 1, dtype=np.int64)
+                for j in range(nne + 1):
+                    row[j] = struct.unpack("I", self.reader.read())[0]
+                nodes_1b = row[1:]
+                self._conn_list.append(nodes_1b.astype(np.int64) - 1)
+                self._etype_list.append(etype)
+                self._parts_map.setdefault(part_name, []).append(
+                    len(self._etype_list) - 1
+                )
+
+        # Surfaces
+        if self.reader.search_block("PLT_SURFACE_SECTION") > 0:
+            while self.reader.check_block("PLT_SURFACE"):
+                self.reader.search_block("PLT_SURFACE")
+                self.reader.search_block("PLT_SURFACE_HDR")
+                self.reader.search_block("PLT_SURFACE_ID")
+                sid_1b = int(struct.unpack("I", self.reader.read())[0]) - 1
+                self.reader.search_block("PLT_SURFACE_FACES")
+                _ = int(struct.unpack("I", self.reader.read())[0])
+                nlen = self.reader.seek_block("PLT_SURFACE_NAME")
+                sname = (
+                    self.reader.read(nlen)
+                    .decode("utf-8", errors="ignore")
+                    .split("\x00")[-1]
+                )
+                self._surf_id2name[sid_1b] = sname
+                self.reader.search_block("PLT_SURFACE_MAX_FACET_NODES")
+                maxn = int(struct.unpack("I", self.reader.read())[0])
+
+                if self.reader.check_block("PLT_FACE_LIST"):
+                    self.reader.search_block("PLT_FACE_LIST")
+                    lst: List[np.ndarray] = []
+                    while self.reader.check_block("PLT_FACE"):
+                        sec_size = self.reader.search_block("PLT_FACE")
+                        cur = self.reader.file.tell()
+                        _ = int(struct.unpack("I", self.reader.read())[0])  # face id
+                        self.reader.file.seek(4, 1)  # skip type
+                        face = np.zeros(maxn, dtype=np.int64)
+                        for j in range(maxn):
+                            face[j] = int(struct.unpack("I", self.reader.read())[0])
+                        lst.append(face - 1)
+                        self.reader.file.seek(cur + sec_size, 0)
+                    self._surfaces_map[sname] = lst
+
+        # Nodesets
+        if self.reader.search_block("PLT_NODESET_SECTION") > 0:
+            while self.reader.check_block("PLT_NODESET"):
+                self.reader.search_block("PLT_NODESET")
+                self.reader.search_block("PLT_NODESET_HDR")
+                self.reader.search_block("PLT_NODESET_ID")
+                _ = int(struct.unpack("I", self.reader.read())[0])
+                self.reader.search_block("PLT_NODESET_SIZE")
+                nsize = int(struct.unpack("I", self.reader.read())[0])
+                nlen = self.reader.search_block("PLT_NODESET_NAME")
+                nname = (
+                    self.reader.read(nlen)
+                    .decode("utf-8", errors="ignore")
+                    .split("\x00")[-1]
+                )
+                ids: List[int] = []
+                if self.reader.check_block("PLT_NODESET_LIST"):
+                    self.reader.search_block("PLT_NODESET_LIST")
+                    for _ in range(nsize):
+                        ids.append(int(struct.unpack("I", self.reader.read())[0]))
+                self._nodesets_map[nname] = np.asarray(ids, dtype=np.int64) - 1
+
+        # Parts rename (optional)
+        if self.reader.search_block("PLT_PARTS_SECTION") > 0:
+            while self.reader.check_block("PLT_PART"):
+                self.reader.search_block("PLT_PART")
+                self.reader.search_block("PLT_PART_ID")
+                pid = int(struct.unpack("I", self.reader.read())[0]) - 1
+                nlen = self.reader.search_block("PLT_PART_NAME")
+                pname = (
+                    self.reader.read(nlen)
+                    .decode("utf-8", errors="ignore")
+                    .split("\x00")[0]
+                )
+                self._part_id2name[pid] = pname
+
+    def _build_mesh(self) -> Mesh:
+        nodes = NodeArray(
+            self._nodes_xyz if self._nodes_xyz is not None else np.zeros((0, 3), float)
+        )
+        # elements (padded)
+        kmax = max((len(c) for c in self._conn_list), default=0)
+        E = len(self._conn_list)
+        conn = -np.ones((E, kmax), dtype=np.int64)
+        nper = np.zeros((E,), dtype=np.int64)
+        for i, c in enumerate(self._conn_list):
             conn[i, : c.size] = c
             nper[i] = c.size
-        elements = ElementArray(conn=conn, nper=nper, etype=np.asarray(etypes, dtype=object))
-        parts_idx = {k: np.asarray(v, dtype=np.int64) for k, v in parts.items()}
-
-        # Surfaces (optional)
+        elements = ElementArray(
+            conn=conn, nper=nper, etype=np.asarray(self._etype_list, dtype=object)
+        )
+        parts = {
+            name: np.asarray(idx, dtype=np.int64)
+            for name, idx in self._parts_map.items()
+        }
+        # surfaces (padded)
         surfaces: Dict[str, SurfaceArray] = {}
-        if br.next_block("PLT_SURFACE_SECTION") >= 0:
-            br.enter("PLT_SURFACE_SECTION")
-            while br.check_block("PLT_SURFACE"):
-                br.enter("PLT_SURFACE")
-                br.next_block("PLT_SURFACE_HDR"); br.enter("PLT_SURFACE_HDR")
-                br.next_block("PLT_SURFACE_ID");  br.enter("PLT_SURFACE_ID");  sid = br.read_u32()
-                br.next_block("PLT_SURFACE_FACES"); br.enter("PLT_SURFACE_FACES"); nfaces = br.read_u32()
-                nlen = br.next_block("PLT_SURFACE_NAME")
-                sname = None
-                if nlen > 0:
-                    br.enter("PLT_SURFACE_NAME")
-                    sname = br.read_bytes(nlen).decode("utf-8", "ignore").split("\x00")[-1]
-                br.next_block("PLT_SURFACE_MAX_FACET_NODES"); br.enter("PLT_SURFACE_MAX_FACET_NODES"); kfac = br.read_u32()
-
-                faces_list: List[np.ndarray] = []
-                if br.next_block("PLT_FACE_LIST") >= 0:
-                    br.enter("PLT_FACE_LIST")
-                    for _ in range(nfaces):
-                        sz = br.enter("PLT_FACE")
-                        raw = np.frombuffer(br.read_bytes(sz), dtype="<u4")
-                        if raw.size >= 2 + kfac:
-                            nn = remap[raw[2 : 2 + kfac].astype(np.int64) - 1]
-                            faces_list.append(nn)
-                if faces_list:
-                    kk = max(len(a) for a in faces_list)
-                    F = len(faces_list)
-                    fa = -np.ones((F, kk), dtype=np.int64)
-                    nps = np.zeros((F,), dtype=np.int64)
-                    for i, a in enumerate(faces_list):
-                        fa[i, : a.size] = a
-                        nps[i] = a.size
-                    surfaces[sname or f"surface_{sid}"] = SurfaceArray(faces=fa, nper=nps)
-
-        # Nodesets (optional)
-        nodesets: Dict[str, np.ndarray] = {}
-        if br.next_block("PLT_NODESET_SECTION") >= 0:
-            br.enter("PLT_NODESET_SECTION")
-            while br.check_block("PLT_NODESET"):
-                br.enter("PLT_NODESET")
-                br.next_block("PLT_NODESET_HDR");  br.enter("PLT_NODESET_HDR")
-                br.next_block("PLT_NODESET_ID");   br.enter("PLT_NODESET_ID");   nid = br.read_u32()
-                br.next_block("PLT_NODESET_SIZE"); br.enter("PLT_NODESET_SIZE"); n = br.read_u32()
-                nlen = br.next_block("PLT_NODESET_NAME")
-                nm = None
-                if nlen > 0:
-                    br.enter("PLT_NODESET_NAME")
-                    nm = br.read_bytes(nlen).decode("utf-8", "ignore").split("\x00")[-1]
-                if br.next_block("PLT_NODESET_LIST") >= 0:
-                    br.enter("PLT_NODESET_LIST")
-                    raw = np.frombuffer(br.read_bytes(4 * n), dtype="<u4")
-                    nodesets[nm or f"nodeset_{nid}"] = remap[raw.astype(np.int64) - 1]
-
-        return Mesh(nodes=nodes, elements=elements, parts=parts_idx, surfaces=surfaces, nodesets=nodesets)
-
-    # --------------- parts --------------------
-
-    def _read_parts(self, br: _Bin) -> None:
-        if br.next_block("PLT_PARTS_SECTION") < 0:
-            return
-        br.enter("PLT_PARTS_SECTION")
-        # Names already captured from domains.
-
-    # --------------- states/results -----------
-
-    def _read_states(self, br: _Bin) -> None:
-        times: List[float] = []
-        # tmp[name] -> list of (domain_name, [time_slices as np.ndarray])
-        tmp: Dict[str, List[Tuple[str, List[np.ndarray]]]] = {k: [] for k in self.results.keys()}
-
-        dom_names = list(self.mesh.parts.keys())
-        item_gidx = {dn: self.mesh.parts[dn] for dn in dom_names}
-        nodal_gidx = {dn: np.unique(self.mesh.elements[self.mesh.parts[dn]].unique_nodes()) for dn in dom_names}
-
-        while True:
-            if br.next_block("PLT_STATE") < 0:
-                break
-            br.enter("PLT_STATE")
-
-            br.next_block("PLT_STATE_HEADER"); br.enter("PLT_STATE_HEADER")
-            br.next_block("PLT_STATE_HDR_TIME"); br.enter("PLT_STATE_HDR_TIME")
-            times.append(br.read_f32())
-            br.next_block("PLT_STATE_STATUS"); br.enter("PLT_STATE_STATUS")
-            status = br.read_u32()
-
-            sz_state = br.next_block("PLT_STATE_DATA")
-            if sz_state < 0:
+        for sname, lst in self._surfaces_map.items():
+            if not lst:
                 continue
-            br.enter("PLT_STATE_DATA")
-            state_end = br.tell() + sz_state
-            if status != 0:
-                br.seek(state_end); continue
+            kk = max(len(a) for a in lst)
+            F = len(lst)
+            faces = -np.ones((F, kk), dtype=np.int64)
+            nps = np.zeros((F,), dtype=np.int64)
+            for i, a in enumerate(lst):
+                faces[i, : a.size] = a
+                nps[i] = a.size
+            surfaces[sname] = SurfaceArray(faces=faces, nper=nps)
+        nodesets = {name: ids for name, ids in self._nodesets_map.items()}
+        return Mesh(
+            nodes=nodes,
+            elements=elements,
+            parts=parts,
+            surfaces=surfaces,
+            nodesets=nodesets,
+        )
 
-            # NODE stream
-            self._var_cursor = 0
-            pos = br.next_block("PLT_NODE_DATA")
-            if pos >= 0 and br.tell() < state_end:
-                sz = br.enter("PLT_NODE_DATA")
-                self._read_state_stream(br, tmp, dom_names, is_node=True, stream_end=br.tell() + sz)
+    # ------------------ dictionary ------------------
 
-            # ELEMENT stream
-            self._var_cursor = 0
-            pos = br.next_block("PLT_ELEMENT_DATA")
-            if pos >= 0 and br.tell() < state_end:
-                sz = br.enter("PLT_ELEMENT_DATA")
-                self._read_state_stream(br, tmp, dom_names, is_node=False, stream_end=br.tell() + sz)
+    def _readDictStream(self, dictType: str):
+        self.reader.search_block(dictType)
+        while self.reader.check_block("PLT_DIC_ITEM"):
+            self.reader.search_block("PLT_DIC_ITEM")
+            self.reader.search_block("PLT_DIC_ITEM_TYPE")
+            tnum = int(struct.unpack("I", self.reader.read())[0])
+            self.reader.search_block("PLT_DIC_ITEM_FMT")
+            fnum = int(struct.unpack("I", self.reader.read())[0])
+            self.reader.search_block("PLT_DIC_ITEM_NAME")
+            name = (
+                self.reader.read(64).decode("utf-8", errors="ignore").split("\x00")[0]
+            )
+            self.dictionary[name] = {
+                "type": FEDataType(tnum).name,
+                "format": Storage_Fmt(fnum).name,
+            }
 
-            br.seek(state_end)
+    def _readDict(self):
+        self.dictionary.clear()
+        self.reader.search_block("PLT_DICTIONARY")
+        self._readDictStream("PLT_DIC_NODAL")
+        self._readDictStream("PLT_DIC_DOMAIN")
+        self._readDictStream("PLT_DIC_SURFACE")
 
-        self.times = np.asarray(times, dtype=float)
-        for name, fld in self.results._fields.items():
-            fld.times = self.times
-            dom_series = tmp.get(name, [])
-            fld.data, fld.gidx, fld.domains = [], [], []
-            if not dom_series:
-                continue
-            for dname, series in dom_series:
-                # stack to NumPy once, no lists left afterward
-                arr = np.stack(series, axis=0) if series else np.zeros((len(self.times), 0, fld.comp), dtype=np.float32)
-                fld.data.append(arr)
-                fld.domains.append(dname)
-                if fld.fmt == "ITEM":
-                    fld.gidx.append(item_gidx.get(dname, np.arange(arr.shape[1], dtype=np.int64)))
-                elif fld.fmt == "NODE":
-                    fld.gidx.append(nodal_gidx.get(dname, np.arange(arr.shape[1], dtype=np.int64)))
+        self._field_meta.clear()
+        self._buf_node.clear()
+        self._buf_elem.clear()
+        self._buf_face.clear()
+
+        for name, d in self.dictionary.items():
+            dtype = FEDataType[d["type"]]
+            fmt = Storage_Fmt[d["format"]]
+            fm = _FieldMeta(name, fmt, dtype)
+            self._field_meta[name] = fm
+            if fmt == Storage_Fmt.FMT_NODE:
+                self._buf_node[name] = []
+            elif fmt == Storage_Fmt.FMT_ITEM:
+                self._buf_elem[name] = {}
+            else:
+                self._buf_face[name] = {}
+
+    # ------------------ states ------------------
+
+    def _flush_state_missing(self):
+        # nodal
+        for v in self._buf_node.keys():
+            if v not in self._state_node_seen:
+                self._buf_node[v].append(None)
+            else:
+                self._buf_node[v].append(self._state_node_seen[v])
+        # element by domain
+        for v in self._buf_elem.keys():
+            if not self._buf_elem[v]:
+                for pname in self._parts_map.keys():
+                    self._buf_elem[v][pname] = []
+            seen = self._state_elem_seen.get(v, {})
+            for pname in self._buf_elem[v].keys():
+                self._buf_elem[v][pname].append(seen.get(pname, None))
+        # face by surface
+        for v in self._buf_face.keys():
+            if not self._buf_face[v]:
+                for sname in self._surfaces_map.keys():
+                    self._buf_face[v][sname] = []
+            seen = self._state_face_seen.get(v, {})
+            for sname in self._buf_face[v].keys():
+                self._buf_face[v][sname].append(seen.get(sname, None))
+
+        self._state_node_seen.clear()
+        self._state_elem_seen.clear()
+        self._state_face_seen.clear()
+
+    def _readResultStream(self, tag: str, kind: str):
+        _ = self.reader.search_block(tag)
+        while self.reader.check_block("PLT_STATE_VARIABLE"):
+            self.reader.search_block("PLT_STATE_VARIABLE")
+            self.reader.search_block("PLT_STATE_VAR_ID")
+            _ = self.reader.read(4)  # id unused
+            dlen = self.reader.search_block("PLT_STATE_VAR_DATA")
+            endp = self.reader.file.tell() + dlen
+
+            dictKey = list(self._field_meta.keys())[self._var]
+            C = self._field_meta[dictKey].ncomp
+
+            while self.reader.file.tell() < endp:
+                dom_raw = int(struct.unpack("I", self.reader.read())[0])  # 1-based id
+                size_b = int(struct.unpack("I", self.reader.read())[0])
+                nrows = int(size_b // (C * 4))
+                if nrows <= 0:
+                    continue
+                block = np.frombuffer(
+                    self.reader.read(4 * C * nrows), dtype=np.float32
+                ).reshape(nrows, C)
+
+                if kind == "node":
+                    self._state_node_seen[dictKey] = block
+                elif kind == "elem":
+                    did = dom_raw - 1
+                    pname = self._part_id2name.get(did, f"part_{did}")
+                    self._state_elem_seen.setdefault(dictKey, {})[pname] = block
                 else:
-                    fld.gidx.append(np.arange(arr.shape[1], dtype=np.int64))
+                    sid = dom_raw - 1
+                    sname = self._surf_id2name.get(sid, f"surface_{sid}")
+                    self._state_face_seen.setdefault(dictKey, {})[sname] = block
 
-    def _read_state_stream(
-        self,
-        br: _Bin,
-        tmp: Dict[str, List[Tuple[str, List[np.ndarray]]]],
-        dom_names: List[str],
-        is_node: bool,
-        stream_end: int,
-    ) -> None:
-        while br.tell() < stream_end:
-            if not br.check_block("PLT_STATE_VARIABLE"):
+            self._var += 1
+
+    def _readState(self) -> int:
+        self._var = 0
+        self.reader.search_block("PLT_STATE")
+        self.reader.search_block("PLT_STATE_HEADER")
+        self.reader.search_block("PLT_STATE_HDR_TIME")
+        t = float(struct.unpack("f", self.reader.read())[0])
+        self.reader.search_block("PLT_STATE_STATUS")
+        status = int(struct.unpack("I", self.reader.read())[0])
+        if status != 0:
+            return 1
+        self.time.append(t)
+        self.reader.search_block("PLT_STATE_DATA")
+        try:
+            self._readResultStream("PLT_NODE_DATA", "node")
+            self._readResultStream("PLT_ELEMENT_DATA", "elem")
+            self._readResultStream("PLT_FACE_DATA", "face")
+        finally:
+            self._flush_state_missing()
+        return 0
+
+    def _skipState(self):
+        a = self.reader.seek_block("PLT_STATE")
+        self.reader.read(a)
+
+    def readAllStates(self):
+        if self.readMode == "readSteps":
+            raise RuntimeError("readAllStates incompatible with readSteps")
+        while True:
+            try:
+                if self._readState() != 0:
+                    break
+            except Exception:
                 break
-            br.enter("PLT_STATE_VARIABLE")
-            br.next_block("PLT_STATE_VAR_ID"); br.enter("PLT_STATE_VAR_ID"); _ = br.read_u32()
+        self.readMode = "readAllStates"
+        self._finalize_results()
 
-            dict_key = list(self.dictionary.keys())[self._var_cursor]
-            comp = FEDataDim[self.dictionary[dict_key]["type"]].value
+    def readSteps(self, stepList: List[int]):
+        if self.readMode == "readAllStates":
+            raise RuntimeError("readSteps incompatible with readAllStates")
+        for i, s in enumerate(stepList):
+            stepDiff = s - (stepList[i - 1] if i > 0 else 0) - (1 if i > 0 else 0)
+            for _ in range(stepDiff):
+                self._skipState()
+            self._readState()
+        self.readMode = "readSteps"
+        self._finalize_results()
+        self.reader.file.close()
 
-            var_sz = br.next_block("PLT_STATE_VAR_DATA")
-            if var_sz < 0:
-                break
-            br.enter("PLT_STATE_VAR_DATA")
-            var_end = br.tell() + var_sz
+    # ------------------ finalize ------------------
 
-            while br.tell() + 8 <= var_end:
-                dom_id = br.read_u32()
-                dom_idx = dom_id - 1
-                sz = br.read_u32()
-                if sz == 0 or br.tell() + sz > var_end:
-                    br.seek(min(var_end, br.tell() + sz)); continue
-                buf = br.read_bytes(sz)
-                fcnt = len(buf) // 4
-                if fcnt == 0 or comp == 0:
-                    continue
-                n_items = fcnt // comp
-                if n_items == 0:
-                    continue
-                arr = np.frombuffer(buf, dtype="<f4", count=n_items * comp).reshape(n_items, comp)
+    def _finalize_results(self):
+        times = np.asarray(self.time, float)
+        self.results = Results(times)
 
-                dname = dom_names[dom_idx] if 0 <= dom_idx < len(dom_names) else str(dom_id)
-                bucket = None
-                for j, (nm, series) in enumerate(tmp[dict_key]):
-                    if nm == dname:
-                        bucket = series; break
-                if bucket is None:
-                    tmp[dict_key].append((dname, []))
-                    bucket = tmp[dict_key][-1][1]
-                bucket.append(arr.astype(np.float32, copy=False))
+        # nodal
+        for name, per_t in self._buf_node.items():
+            sizes = {a.shape[0] for a in per_t if a is not None}
+            if len(sizes) > 1:
+                raise ValueError(f"{name}: inconsistent nodal row count over time")
+            self.results.register_nodal(name, self._field_meta[name], per_t, self.mesh)
 
-            br.seek(var_end)
-            self._var_cursor += 1
+        # element
+        for name, per_name in self._buf_elem.items():
+            self.results.register_elem(name, self._field_meta[name], per_name)
+
+        # face
+        for name, per_name in self._buf_face.items():
+            self.results.register_face(name, self._field_meta[name], per_name)
+
+        self._buf_node.clear()
+        self._buf_elem.clear()
+        self._buf_face.clear()
+
+    # ------------------ header ------------------
+
+    def _read_xplt(self):
+        magic = int(struct.unpack("I", self.reader.read())[0])
+        if magic != 4605250:
+            raise RuntimeError("Not a valid xplt")
+        self.reader.search_block("PLT_ROOT")
+        self.reader.search_block("PLT_HEADER")
+        self.reader.search_block("PLT_HDR_VERSION")
+        self.version = int(struct.unpack("I", self.reader.read())[0])
+        self.reader.search_block("PLT_HDR_COMPRESSION")
+        self.compression = int(struct.unpack("I", self.reader.read())[0])
+        self._readDict()
+        self._readMesh()
