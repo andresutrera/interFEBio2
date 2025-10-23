@@ -1,0 +1,129 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "extensions": {
+        "recommendations": [
+            "GitHub.copilot",
+            "James-Yu.latex-workshop",
+            "vscode.markdown-language-features",
+            "streetsidesoftware.code-spell-checker",
+            "vscode.git",
+            "vscode.json-language-features",
+            "DavidAnson.vscode-markdownlint",
+            "vscode.markdown-math",
+            "matthiasschedel.bibtex-manager",
+            "charliermarsh.ruff",
+            "redhat.vscode-yaml"
+        ]
+    },
+    "settings": {
+        "workbench.startupEditor": "none", // prevent welcome page
+        "cSpell.enabled": true,
+        // -------------------------
+        // Editor (GLOBAL)
+        // -------------------------
+        "files.autoSave": "afterDelay",
+        "editor.formatOnSave": true,
+        "editor.wordWrap": "bounded",
+        "git.openRepositoryInParentFolders": "always",
+        "editor.rulers": [
+            97
+        ],
+        "editor.wordWrapColumn": 97,
+        "files.eol": "\n",
+        "editor.minimap.enabled": false,
+        "editor.quickSuggestions": {
+            "other": false,
+            "comments": false,
+            "strings": false,
+        },
+        // -------------------------
+        // LaTeX Workshop
+        // -------------------------
+        // Editor Overrides
+        "[latex]": {
+            "editor.defaultFormatter": "James-Yu.latex-workshop",
+            "editor.formatOnSave": false,
+            "files.autoSave": "off"
+        },
+        // Compilation
+        "latex-workshop.latex.autoBuild.run": "onSave",
+        "latex-workshop.latex.recipes": [
+            {
+                "name": "latexmk",
+                "tools": [
+                    "latexmk"
+                ]
+            }
+        ],
+        "latex-workshop.latex.tools": [
+            {
+                "name": "latexmk",
+                "command": "latexmk",
+                "args": [
+                    "-shell-escape",
+                    "-synctex=1",
+                    "-interaction=nonstopmode",
+                    "-file-line-error",
+                    "-pdf",
+                    "-outdir=%DIR%",
+                    "%DOC%"
+                ],
+                "env": {}
+            }
+        ],
+        // TeX formatting (tex-fmt)
+        "latex-workshop.formatting.tex-fmt.path": "tex-fmt",
+        "latex-workshop.formatting.tex-fmt.args": [
+            // It seens that this does not work, vscode returns an error. could not find out
+            // "--config",
+            // ".config/tex-fmt.toml",
+            "--wraplen",
+            "97",
+            "--tabsize",
+            "4"
+        ],
+        // -------------------------
+        // Python
+        // -------------------------
+        "python.defaultInterpreterPath": "/usr/local/bin/python3",
+        // -------------------------
+        // Markdown
+        // -------------------------
+        "[markdown]": {
+            "editor.formatOnSave": true,
+            "editor.formatOnPaste": true,
+        },
+        // -------------------------
+        // Yaml
+        // -------------------------
+        "yaml.schemas": {
+            "https://squidfunk.github.io/mkdocs-material/schema.json": "mkdocs.yml",
+            "./.schema/ilumpx.schema.json": "**/*.yaml"
+        },
+        "files.exclude": {
+            "**/.mypy_cache": true,
+            "**/.pytest_cache": true,
+            "**/.ruff_cache": true,
+            "**/__pycache__": true,
+            "build": true
+        },
+        "search.exclude": {
+            "**/.mypy_cache": true,
+            "**/.pytest_cache": true,
+            "**/.ruff_cache": true,
+            "**/__pycache__": true,
+            "build": true
+        },
+        "files.watcherExclude": {
+            "**/.mypy_cache/**": true,
+            "**/.pytest_cache/**": true,
+            "**/.ruff_cache/**": true,
+            "**/__pycache__/**": true,
+            "build": true
+        }
+    }
+}
