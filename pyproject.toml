@@ -3,8 +3,8 @@ requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [project]
-name = "febio-interface"
-version = "0.1.0"
+name = "interFEBio"
+version = "2.0.0"
 description = "Python bindings and XML model tooling for FEBio."
 authors = [{ name = "FEBio Interface Developers" }]
 requires-python = ">=3.10"
@@ -36,14 +36,13 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "src/classExposer",
-  "src/interFEBio",
+  "interFEBio",
 ]
 
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src",
+  "interFEBio",
   "pyproject.toml",
 ]
 
