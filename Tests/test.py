@@ -1,18 +1,27 @@
+import numpy as np
+
+import vtk, pyvista as pv
+
+
 from interFEBio.XPLT.XPLT import xplt
+from interFEBio.Visualization.Plotter import PVPlotter
+
+print("supports_plotting:", pv.system_supports_plotting())
 
 xp = xplt("ring.xplt")
 
-xp.readSteps([0, 200])
-print(xp.dictionary)
-str = xp.results["displacement"]
+xp.readAllStates()
+print(xp.mesh.parts)
 
-print(str.time(slice(0, None)).nodes(10).comp("x"))
-print(str[:, 10, 0])
+pvplt = PVPlotter(offscreen=False)  # or True if headless
+pvplt.attach_xplt(xp)
 
-ff = str = xp.results["contact force"]
 
-reee = ff.surface("contactPin").time(":").faces(0).comp("x")
+# print(pvplt.domains())  # e.g. ['arteria', 'contactPin', 'wires']
 
-print(reee.shape)
+pvplt.add_domain("arteria", style="surface", color="lightgray", opacity=1.0)
+pvplt.add_domain("part_1", style="surface", color="black", opacity=1.0)
 
-print(xp.results.times())
+# # 4) View
+pvplt.view_isometric()
+pvplt.show()

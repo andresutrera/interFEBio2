@@ -20,8 +20,32 @@ from .Enums import (
     FEDataType,
     Storage_Fmt,
     nodesPerElementClass,
-    tags,
 )
+
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
+
+
+def _norm_node_ids(ids: np.ndarray, N: int) -> np.ndarray:
+    """Normalize node ids to zero-based. Accepts padded negatives."""
+    a = np.asarray(ids, dtype=np.int64, order="C")
+    if a.size == 0:
+        return a
+    valid = a >= 0
+    if not np.any(valid):
+        return a
+    vmax = int(a[valid].max())
+    # 1-based if highest referenced id equals N -> shift down
+    if vmax == N:
+        a[valid] -= 1
+    elif vmax > N:
+        raise ValueError(f"node id {vmax} exceeds node count {N}")
+    # else already zero-based
+    if np.any(a[valid] < 0) or np.any(a[valid] >= N):
+        raise ValueError("normalized node ids out of range")
+    return a
+
 
 # ---------------------------------------------------------------------
 # Field meta
@@ -173,7 +197,6 @@ class _BaseView:
         raise NotImplementedError
 
     def eval(self) -> np.ndarray:
-        """Evaluate and return the selected data; subclasses must implement this."""
         raise NotImplementedError
 
     def __len__(self) -> int:
@@ -568,7 +591,9 @@ class xplt:
 
             nlen = self._reader.search_block("PLT_DOM_NAME")
             dname = (
-                self._reader.read(nlen).decode("utf-8", errors="ignore")
+                self._reader.read(nlen)
+                .split(b"\x00")[-1]
+                .decode("utf-8", errors="ignore")
                 if nlen > 0
                 else None
             )
@@ -581,18 +606,23 @@ class xplt:
 
             while self._reader.check_block("PLT_ELEMENT"):
                 sec_sz = self._reader.search_block("PLT_ELEMENT", print_tag=0)
-                cur = self._reader.tell()
-                row = np.zeros(nne + 1, dtype=np.int64)
-                for j in range(nne + 1):
-                    row[j] = struct.unpack("I", self._reader.read(4))[0]
-                nodes_1b = row[1:]
-                self._conn_list.append(nodes_1b.astype(np.int64) - 1)
+                payload = self._reader.read(sec_sz)
+                vals = np.frombuffer(payload, dtype=np.uint32, count=sec_sz // 4)
+
+                if vals.size < nne:
+                    raise ValueError(
+                        f"PLT_ELEMENT too short for {etype} (need {nne}, got {vals.size})"
+                    )
+
+                nodes_raw = vals[-nne:]
+                N = self._nodes_xyz.shape[0] if self._nodes_xyz is not None else 0
+                nodes0 = _norm_node_ids(nodes_raw, N)
+
+                self._conn_list.append(nodes0)
                 self._etype_list.append(etype)
                 self._parts_map.setdefault(part_name, []).append(
                     len(self._etype_list) - 1
                 )
-                # jump to end of this PLT_ELEMENT payload
-                self._reader.seek(cur + sec_sz, SEEK_SET)
 
         # Surfaces
         if self._reader.search_block("PLT_SURFACE_SECTION") > 0:
@@ -624,7 +654,12 @@ class xplt:
                         face = np.zeros(maxn, dtype=np.int64)
                         for j in range(maxn):
                             face[j] = int(struct.unpack("I", self._reader.read(4))[0])
-                        lst.append(face - 1)
+                        N = (
+                            self._nodes_xyz.shape[0]
+                            if self._nodes_xyz is not None
+                            else 0
+                        )
+                        lst.append(_norm_node_ids(face, N))
                         self._reader.seek(cur + sec_size, SEEK_SET)
                     self._surfaces_map[sname] = lst
 
@@ -648,7 +683,10 @@ class xplt:
                     self._reader.search_block("PLT_NODESET_LIST")
                     for _ in range(nsize):
                         ids.append(int(struct.unpack("I", self._reader.read(4))[0]))
-                self._nodesets_map[nname] = np.asarray(ids, dtype=np.int64) - 1
+                N = self._nodes_xyz.shape[0] if self._nodes_xyz is not None else 0
+                self._nodesets_map[nname] = _norm_node_ids(
+                    np.asarray(ids, dtype=np.int64), N
+                )
 
         # Parts rename (optional)
         if self._reader.search_block("PLT_PARTS_SECTION") > 0:
@@ -825,7 +863,6 @@ class xplt:
         return 0
 
     def _skipState(self):
-        """Advance to the next PLT_STATE and skip its payload."""
         size = self._reader.search_block("PLT_STATE")
         if size < 0:
             raise RuntimeError("No further PLT_STATE found while skipping")
