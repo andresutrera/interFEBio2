@@ -1,37 +1,32 @@
-import numpy as np
-import pyvista as pv
 from interFEBio.XPLT.XPLT import xplt
-from interFEBio.Visualization.Plotter import PVPlotter
+from interFEBio.Visualization.Plotter import PVBridge
 
 import matplotlib.pyplot as plt
 
+import pyvista as pv
+
+
 # Load the XPLT file
-xp = xplt("ring.xplt")
+xp = xplt("test.xplt")
 xp.readAllStates()
 
-print(xp.mesh.parts)
 
-print(xp.dictionary)
-
-print(xp.results)
-stress = xp.results.node["displacement"]
-print(stress)
-
-stress = (
-    xp.results.elem_item["stress"]
-    .region("arteria")
-    .time(":")
-    .elems(0)
-    .comp(slice(0, None))
-)
-print(stress)
+print(xp.results.node["displacement"])
 
 
-force = (
-    xp.results.face_region["contact force"].region("contactArtery").time(":").comp("y")
-)
-print(force)
+# bridge = PVBridge(xp.mesh)
+# grid = bridge.domain_grid("Part1")
 
+# grid2 = bridge.domain_grid("Part4")
+# # # attach nodal vectors
+# u = xp.results.node["displacement"]
+# bridge.add_node_result(grid, u, t=-1, name="U")  # sets active vectors
 
-plt.plot(xp.results.times(), force)
-plt.show()
+# # attach element item tensors (symmetric 6 -> 9)
+# s = xp.results.elem_item["stress"].region("Part1")
+# bridge.add_elem_item_result(grid, s, domain="Part1", t=-1, name="S")
+
+# pl = pv.Plotter()
+# pl.add_mesh(grid, scalars="U", show_edges=True)
+# pl.add_mesh(grid2, show_edges=True)
+# pl.show()
