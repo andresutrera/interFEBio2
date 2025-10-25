@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List
 
 import numpy as np
 import pyvista as pv
@@ -12,7 +12,7 @@ from interFEBio.XPLT.XPLT import (
     MultResultView,
     NodeResultView,
     RegionResultView,
-)  # adjust import path
+)
 
 # -------------------------- internal helpers --------------------------
 
@@ -59,10 +59,7 @@ def _vtk_cell_type(etype: str, k: int) -> int | None:
 
 
 def _six_to_nine(voigt6: np.ndarray) -> np.ndarray:
-    """
-    Input: (N,6) with order [xx, yy, zz, yz, xz, xy]
-    Output: (N,9) row-major [xx, xy, xz, yx, yy, yz, zx, zy, zz]
-    """
+    # (N,6)[xx,yy,zz,yz,xz,xy] -> (N,9) row-major 3x3
     v = np.asarray(voigt6, dtype=np.float32)
     out = np.empty((v.shape[0], 9), dtype=np.float32)
     xx, yy, zz, yz, xz, xy = v.T
@@ -78,40 +75,14 @@ def _six_to_nine(voigt6: np.ndarray) -> np.ndarray:
     return out
 
 
-def _set_point_data_vectors(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
+def _attach_point(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
     a = np.asarray(arr, dtype=np.float32)
     ds.point_data[name] = a
-    ds.set_active_vectors(name)
 
 
-def _set_cell_data_vectors(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
+def _attach_cell(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
     a = np.asarray(arr, dtype=np.float32)
     ds.cell_data[name] = a
-    ds.set_active_vectors(name)
-
-
-def _set_point_data_tensors(ds: pv.DataSet, name: str, arr9: np.ndarray) -> None:
-    a = np.asarray(arr9, dtype=np.float32)
-    ds.point_data[name] = a
-    ds.set_active_tensors(name)
-
-
-def _set_cell_data_tensors(ds: pv.DataSet, name: str, arr9: np.ndarray) -> None:
-    a = np.asarray(arr9, dtype=np.float32)
-    ds.cell_data[name] = a
-    ds.set_active_tensors(name)
-
-
-def _set_point_data_scalars(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
-    a = np.asarray(arr, dtype=np.float32).reshape(-1)
-    ds.point_data[name] = a
-    ds.set_active_scalars(name)
-
-
-def _set_cell_data_scalars(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
-    a = np.asarray(arr, dtype=np.float32).reshape(-1)
-    ds.cell_data[name] = a
-    ds.set_active_scalars(name)
 
 
 # -------------------------- public bridge --------------------------
@@ -119,7 +90,7 @@ def _set_cell_data_scalars(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
 
 @dataclass
 class PVBridge:
-    """Build per-domain grids and attach results to PyVista datasets."""
+    """Build per-domain grids and attach pre-sliced results to PyVista."""
 
     mesh: Mesh
 
@@ -151,8 +122,7 @@ class PVBridge:
             ids = conn[e, :k]
             if ids.min() < 0:
                 continue
-            rec = np.concatenate(([k], ids.astype(np.int64)))
-            cells_list.append(rec)
+            cells_list.append(np.concatenate(([k], ids.astype(np.int64))))
             ctype_list.append(vtk_id)
 
         if not ctype_list:
@@ -180,200 +150,262 @@ class PVBridge:
         pts = np.asarray(m.nodes.xyz, dtype=np.float64, order="C")
         return pv.PolyData(pts, faces).clean()
 
-    # ---------- node data ----------
+    # ---------- node data (array provided) ----------
 
-    def add_node_result(
+    def add_node_result_array(
         self,
         ds: pv.DataSet,
+        *,
         view: NodeResultView,
-        t: int,
+        data: np.ndarray,
         name: str | None = None,
-        comp: int | slice | Iterable[int] | np.ndarray | str | None = ":",
+        set_active: bool = True,
     ) -> str:
         """
-        Attaches nodal data to `ds.point_data` at time index `t`.
-        Returns array name used.
+        Attach a pre-sliced nodal array to point_data.
+        data shape: (N,) or (N, C). N must equal ds.n_points.
         """
-        arr = view[t, ":", comp]
-        n, c = (arr.shape[0], 1) if arr.ndim == 1 else arr.shape
-        out_name = name or view.meta.name
+        a = np.asarray(data, dtype=np.float32)
+        if a.ndim == 1:
+            if a.shape[0] != ds.n_points:
+                raise ValueError(f"points {ds.n_points} != data {a.shape[0]}")
+            _attach_point(ds, name or view.meta.name, a)
+            if set_active:
+                ds.set_active_scalars(name or view.meta.name)
+            return name or view.meta.name
+
+        if a.shape[0] != ds.n_points:
+            raise ValueError(f"points {ds.n_points} != data {a.shape[0]}")
+        c = a.shape[1]
+        nm = name or view.meta.name
 
         if view.meta.dtype == FEDataType.VEC3F and c == 3:
-            _set_point_data_vectors(ds, out_name, arr.reshape(n, 3))
+            _attach_point(ds, nm, a)
+            if set_active:
+                ds.set_active_vectors(nm)
         elif view.meta.dtype in (FEDataType.MAT3FS, FEDataType.MAT3F):
-            if c == 1:
-                _set_point_data_scalars(ds, out_name, arr.reshape(n))
-            elif c == 6 and view.meta.dtype == FEDataType.MAT3FS:
-                _set_point_data_tensors(ds, out_name, _six_to_nine(arr.reshape(n, 6)))
+            if c == 6 and view.meta.dtype == FEDataType.MAT3FS:
+                _attach_point(ds, nm, _six_to_nine(a))
+                if set_active:
+                    ds.set_active_tensors(nm)
             elif c == 9:
-                _set_point_data_tensors(ds, out_name, arr.reshape(n, 9))
+                _attach_point(ds, nm, a)
+                if set_active:
+                    ds.set_active_tensors(nm)
             else:
-                # fallback: first component as scalar
-                _set_point_data_scalars(ds, out_name, arr.reshape(n, c)[:, 0])
+                _attach_point(ds, nm, a[:, 0])
+                if set_active:
+                    ds.set_active_scalars(nm)
         else:
-            _set_point_data_scalars(ds, out_name, arr.reshape(n))
-        return out_name
+            _attach_point(ds, nm, a[:, 0] if c > 1 else a)
+            if set_active:
+                ds.set_active_scalars(nm)
+        return nm
 
-    # ---------- per-item data (elements/faces) ----------
+    # ---------- element FMT_ITEM (array provided) ----------
 
-    def add_elem_item_result(
+    def add_elem_item_array(
         self,
         ds: pv.UnstructuredGrid,
+        *,
         view: ItemResultView,
         domain: str,
-        t: int,
+        data: np.ndarray,
         name: str | None = None,
-        comp: int | slice | Iterable[int] | np.ndarray | str | None = ":",
+        set_active: bool = True,
     ) -> str:
         """
-        Attaches element FMT_ITEM data for `domain` to `ds.cell_data`.
-        `ds` must be the grid built for the same domain.
+        Attach a pre-sliced per-element array to cell_data.
+        data shape: (R,) or (R, C). R must equal ds.n_cells.
         """
-        local = view.region(domain)
-        arr = local[t, ":", comp]  # (R,C) or (R,)
-        r, c = (arr.shape[0], 1) if arr.ndim == 1 else arr.shape
-        if ds.n_cells != r:
-            raise ValueError(
-                f"grid cells {ds.n_cells} != result rows {r} for domain '{domain}'"
-            )
-        out_name = name or view.meta.name
+        a = np.asarray(data, dtype=np.float32)
+        if a.ndim == 1:
+            if a.shape[0] != ds.n_cells:
+                raise ValueError(f"cells {ds.n_cells} != data {a.shape[0]}")
+            _attach_cell(ds, name or view.meta.name, a)
+            if set_active:
+                ds.set_active_scalars(name or view.meta.name)
+            return name or view.meta.name
+
+        if a.shape[0] != ds.n_cells:
+            raise ValueError(f"cells {ds.n_cells} != data {a.shape[0]}")
+        c = a.shape[1]
+        nm = name or view.meta.name
 
         if view.meta.dtype == FEDataType.VEC3F and c == 3:
-            _set_cell_data_vectors(ds, out_name, arr.reshape(r, 3))
+            _attach_cell(ds, nm, a)
+            if set_active:
+                ds.set_active_vectors(nm)
         elif view.meta.dtype in (FEDataType.MAT3FS, FEDataType.MAT3F):
-            if c == 1:
-                _set_cell_data_scalars(ds, out_name, arr.reshape(r))
-            elif c == 6 and view.meta.dtype == FEDataType.MAT3FS:
-                _set_cell_data_tensors(ds, out_name, _six_to_nine(arr.reshape(r, 6)))
+            if c == 6 and view.meta.dtype == FEDataType.MAT3FS:
+                _attach_cell(ds, nm, _six_to_nine(a))
+                if set_active:
+                    ds.set_active_tensors(nm)
             elif c == 9:
-                _set_cell_data_tensors(ds, out_name, arr.reshape(r, 9))
+                _attach_cell(ds, nm, a)
+                if set_active:
+                    ds.set_active_tensors(nm)
             else:
-                _set_cell_data_scalars(ds, out_name, arr.reshape(r, c)[:, 0])
+                _attach_cell(ds, nm, a[:, 0])
+                if set_active:
+                    ds.set_active_scalars(nm)
         else:
-            _set_cell_data_scalars(ds, out_name, arr.reshape(r))
-        return out_name
+            _attach_cell(ds, nm, a[:, 0] if c > 1 else a)
+            if set_active:
+                ds.set_active_scalars(nm)
+        return nm
 
-    def add_face_item_result(
+    # ---------- surface FMT_ITEM (array provided) ----------
+
+    def add_face_item_array(
         self,
         ds: pv.PolyData | pv.UnstructuredGrid,
+        *,
         view: ItemResultView,
         surface: str,
-        t: int,
+        data: np.ndarray,
         name: str | None = None,
-        comp: int | slice | Iterable[int] | np.ndarray | str | None = ":",
+        set_active: bool = True,
     ) -> str:
         """
-        Attaches surface FMT_ITEM data for `surface` to `cell_data` of `ds`.
+        Attach a pre-sliced per-face array to cell_data.
+        data shape: (R,) or (R, C). R must equal ds.n_cells.
         """
-        local = view.region(surface)
-        arr = local[t, ":", comp]
-        r, c = (arr.shape[0], 1) if arr.ndim == 1 else arr.shape
-        if ds.n_cells != r:
-            raise ValueError(
-                f"mesh faces {ds.n_cells} != result rows {r} for surface '{surface}'"
-            )
-        out_name = name or view.meta.name
+        a = np.asarray(data, dtype=np.float32)
+        if a.ndim == 1:
+            if a.shape[0] != ds.n_cells:
+                raise ValueError(f"cells {ds.n_cells} != data {a.shape[0]}")
+            _attach_cell(ds, name or view.meta.name, a)
+            if set_active:
+                ds.set_active_scalars(name or view.meta.name)
+            return name or view.meta.name
+
+        if a.shape[0] != ds.n_cells:
+            raise ValueError(f"cells {ds.n_cells} != data {a.shape[0]}")
+        c = a.shape[1]
+        nm = name or view.meta.name
 
         if view.meta.dtype == FEDataType.VEC3F and c == 3:
-            _set_cell_data_vectors(ds, out_name, arr.reshape(r, 3))
+            _attach_cell(ds, nm, a)
+            if set_active:
+                ds.set_active_vectors(nm)
         elif view.meta.dtype in (FEDataType.MAT3FS, FEDataType.MAT3F):
-            if c == 1:
-                _set_cell_data_scalars(ds, out_name, arr.reshape(r))
-            elif c == 6 and view.meta.dtype == FEDataType.MAT3FS:
-                _set_cell_data_tensors(ds, out_name, _six_to_nine(arr.reshape(r, 6)))
+            if c == 6 and view.meta.dtype == FEDataType.MAT3FS:
+                _attach_cell(ds, nm, _six_to_nine(a))
+                if set_active:
+                    ds.set_active_tensors(nm)
             elif c == 9:
-                _set_cell_data_tensors(ds, out_name, arr.reshape(r, 9))
+                _attach_cell(ds, nm, a)
+                if set_active:
+                    ds.set_active_tensors(nm)
             else:
-                _set_cell_data_scalars(ds, out_name, arr.reshape(r, c)[:, 0])
+                _attach_cell(ds, nm, a[:, 0])
+                if set_active:
+                    ds.set_active_scalars(nm)
         else:
-            _set_cell_data_scalars(ds, out_name, arr.reshape(r))
-        return out_name
+            _attach_cell(ds, nm, a[:, 0] if c > 1 else a)
+            if set_active:
+                ds.set_active_scalars(nm)
+        return nm
 
-    # ---------- FMT_MULT reduction to cells ----------
+    # ---------- FMT_MULT reduction (array provided) ----------
 
-    def add_elem_mult_reduced(
+    def add_elem_mult_reduced_array(
         self,
         ds: pv.UnstructuredGrid,
+        *,
         view: MultResultView,
         domain: str,
-        t: int,
+        data: np.ndarray,  # shape (R, Kmax) or (R, Kmax, C)
         reducer: str = "mean",
         name: str | None = None,
-        comp: int | slice | Iterable[int] | np.ndarray | str | None = ":",
+        set_active: bool = True,
     ) -> str:
         """
-        Reduces FMT_MULT (per element-node) to one value per element and
-        attaches to `cell_data`.
-        Reducers: 'mean', 'max', 'min', 'first'.
+        Reduce a pre-packed per-element-node array into one value per element,
+        then attach to cell_data.
         """
-        local = view.region(domain)
-        blk = local[t, ":", ":", comp]  # (R, Kmax, C) or (R, Kmax)
+        blk = np.asarray(data, dtype=np.float32)
         if blk.ndim == 2:
             blk = blk[:, :, None]
         R, Kmax, C = blk.shape
         if ds.n_cells != R:
-            raise ValueError(
-                f"grid cells {ds.n_cells} != result rows {R} for domain '{domain}'"
-            )
+            raise ValueError(f"cells {ds.n_cells} != data rows {R}")
 
         elem_rows = np.asarray(self.mesh.parts[domain], dtype=np.int64)
         nper = np.asarray(self.mesh.elements.nper[elem_rows], dtype=np.int64)
 
-        red_fn: Dict[str, Callable[[np.ndarray, int], np.ndarray]] = {
-            "mean": lambda a, k: np.nanmean(a[:k, :], axis=0),
-            "max": lambda a, k: np.nanmax(a[:k, :], axis=0),
-            "min": lambda a, k: np.nanmin(a[:k, :], axis=0),
-            "first": lambda a, k: a[0:1, :].reshape(-1)
-            if k > 0
-            else np.full((a.shape[1],), np.nan, np.float32),
-        }
-
-        if reducer not in red_fn:
+        if reducer == "mean":
+            out = np.vstack(
+                [
+                    np.nanmean(blk[r, : nper[r], :], axis=0)
+                    if nper[r] > 0
+                    else np.full((C,), np.nan, np.float32)
+                    for r in range(R)
+                ]
+            )
+        elif reducer == "max":
+            out = np.vstack(
+                [
+                    np.nanmax(blk[r, : nper[r], :], axis=0)
+                    if nper[r] > 0
+                    else np.full((C,), np.nan, np.float32)
+                    for r in range(R)
+                ]
+            )
+        elif reducer == "min":
+            out = np.vstack(
+                [
+                    np.nanmin(blk[r, : nper[r], :], axis=0)
+                    if nper[r] > 0
+                    else np.full((C,), np.nan, np.float32)
+                    for r in range(R)
+                ]
+            )
+        elif reducer == "first":
+            out = np.vstack(
+                [
+                    blk[r, 0, :] if nper[r] > 0 else np.full((C,), np.nan, np.float32)
+                    for r in range(R)
+                ]
+            )
+        else:
             raise ValueError("reducer must be one of {'mean','max','min','first'}")
 
-        out = np.empty((R, C), dtype=np.float32)
-        for r in range(R):
-            k = int(nper[r])
-            out[r, :] = red_fn[reducer](blk[r, :, :], k)
-
-        out_name = name or f"{view.meta.name}_{reducer}"
-        # vector/tensor handling mirrors ITEM
-        if view.meta.dtype == FEDataType.VEC3F and C == 3:
-            _set_cell_data_vectors(ds, out_name, out.reshape(R, 3))
+        nm = name or f"{view.meta.name}_{reducer}"
+        if C == 1:
+            _attach_cell(ds, nm, out.reshape(R))
+            if set_active:
+                ds.set_active_scalars(nm)
+        elif view.meta.dtype == FEDataType.VEC3F and C == 3:
+            _attach_cell(ds, nm, out.reshape(R, 3))
+            if set_active:
+                ds.set_active_vectors(nm)
         elif view.meta.dtype in (FEDataType.MAT3FS, FEDataType.MAT3F):
-            if C == 1:
-                _set_cell_data_scalars(ds, out_name, out.reshape(R))
-            elif C == 6 and view.meta.dtype == FEDataType.MAT3FS:
-                _set_cell_data_tensors(ds, out_name, _six_to_nine(out.reshape(R, 6)))
+            if C == 6 and view.meta.dtype == FEDataType.MAT3FS:
+                _attach_cell(ds, nm, _six_to_nine(out.reshape(R, 6)))
+                if set_active:
+                    ds.set_active_tensors(nm)
             elif C == 9:
-                _set_cell_data_tensors(ds, out_name, out.reshape(R, 9))
+                _attach_cell(ds, nm, out.reshape(R, 9))
+                if set_active:
+                    ds.set_active_tensors(nm)
             else:
-                _set_cell_data_scalars(ds, out_name, out[:, 0])
+                _attach_cell(ds, nm, out[:, 0])
+                if set_active:
+                    ds.set_active_scalars(nm)
         else:
-            _set_cell_data_scalars(ds, out_name, out.reshape(R))
-        return out_name
+            _attach_cell(ds, nm, out[:, 0])
+            if set_active:
+                ds.set_active_scalars(nm)
+        return nm
 
-    # ---------- region vectors ----------
+    # ---------- region vectors (array provided) ----------
 
-    def region_series(
-        self,
-        view: RegionResultView,
-        region: str,
-        comp: int | slice | Iterable[int] | np.ndarray | str | None = ":",
-    ) -> np.ndarray:
+    def region_series_array(self, *, data: np.ndarray) -> np.ndarray:
         """
-        Returns a (T, C_sel) array of region (domain/surface) values over time.
-        Useful for custom plotting (not attached to a mesh).
+        Pass-through helper for pre-sliced region vectors over time.
+        Ensures float32 and 2D shape (T, Csel).
         """
-        return (
-            view.time(":").eval(region=region)[..., _normalize_comp(comp)]
-            if comp != ":"
-            else view.time(":").eval(region=region)
-        )
-
-
-# tiny helper to normalize component argument when slicing numpy arrays directly
-def _normalize_comp(
-    comp: int | slice | Iterable[int] | np.ndarray | str | None,
-) -> int | slice | Iterable[int] | np.ndarray | None:
-    return None if comp == ":" else comp
+        a = np.asarray(data, dtype=np.float32)
+        return a.reshape(a.shape[0], -1)
