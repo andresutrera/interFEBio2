@@ -1,7 +1,4 @@
-# XPLT.py — FEBio .xplt reader with robust FMT_* handling and typed views.
-# Mesh API: interFEBio.Mesh.Mesh
-# Enums:    .Enums
-# Reader:   .BinaryReader.BinaryReader
+# XPLT.py — FEBio .xplt reader with regional FMT_NODE support and fully typed views.
 
 from __future__ import annotations
 
@@ -239,22 +236,31 @@ class NodeResultView(_BaseView):
         return np.stack([_one(k) for k in T_sel], axis=0)
 
     def __getitem__(self, key):
+        # allow scalar time like view[0]
         if not isinstance(key, tuple):
             t = key
-            self._t_idx = t if t != ":" else slice(None)  # type: ignore[assignment]
+            if isinstance(t, str) and t == ":":
+                t = slice(None)
+            self._t_idx = t  # int | slice | np.ndarray | Iterable[int] | None
             self._node_idx = None
             self._comp_idx = None
             return self.eval()
+
+        # normalize 3-tuple
         t, n, c = (key + (slice(None),) * 3)[:3]
-        if t == ":":
+
+        # only convert ":" when it is a string token
+        if isinstance(t, str) and t == ":":
             t = slice(None)
-        if n == ":":
+        if isinstance(n, str) and n == ":":
             n = slice(None)
         if isinstance(c, str):
-            c = _comp_spec_to_index(self.meta, c)
-        self._t_idx = t  # type: ignore[assignment]
-        self._node_idx = n  # type: ignore[assignment]
-        self._comp_idx = c  # type: ignore[assignment]
+            c = slice(None) if c == ":" else _comp_spec_to_index(self.meta, c)
+
+        # store raw selectors; numpy arrays are supported
+        self._t_idx = t  # int | slice | np.ndarray[bool|int] | Iterable[int]
+        self._node_idx = n  # int | slice | np.ndarray[bool|int] | Iterable[int]
+        self._comp_idx = c  # int | slice | np.ndarray[bool|int] | Iterable[int] | None
         return self.eval()
 
     def __repr__(self) -> str:
@@ -262,6 +268,109 @@ class NodeResultView(_BaseView):
         C = next((a.shape[1] for a in self._per_t if a is not None), self.meta.ncomp)
         missing = sum(1 for a in self._per_t if a is None)
         return f"NodeResultView(name={self.meta.name!r}, T={len(self)}, N={N}, C={C}, missing={missing})"
+
+    __str__ = __repr__
+
+
+class NodeRegionResultView(_BaseView):
+    """FMT_NODE split by regions (domains)."""
+
+    __slots__ = ("_per_name", "_node_idx", "_region_nodes")
+
+    def __init__(
+        self,
+        meta: _FieldMeta,
+        times: np.ndarray,
+        per_name: Dict[str, List[np.ndarray | None]],
+        region_nodes: Dict[str, np.ndarray],
+    ):
+        super().__init__(meta, times)
+        self._per_name = per_name
+        self._region_nodes = region_nodes
+        self._node_idx: Index = None
+
+    def regions(self) -> List[str]:
+        return sorted(self._per_name.keys())
+
+    domains = regions
+
+    def region(self, name: str):
+        if name not in self._per_name:
+            raise KeyError(name)
+        return NodeRegionResultView(
+            self.meta,
+            self._times,
+            {name: self._per_name[name]},
+            {name: self._region_nodes[name]},
+        )
+
+    domain = region
+
+    def region_nodes(self) -> np.ndarray:
+        if len(self._region_nodes) != 1:
+            raise ValueError("multiple regions present; select region() first")
+        return next(iter(self._region_nodes.values()))
+
+    def nodes(self, ids: Index):
+        self._node_idx = ids
+        return self
+
+    def dims(self) -> tuple[str, ...]:
+        return ("time", "node_in_region", "component")
+
+    def _pick_per_t(self) -> List[np.ndarray | None]:
+        if len(self._per_name) != 1:
+            raise ValueError("multiple regions present; select region() first")
+        return next(iter(self._per_name.values()))
+
+    def eval(self, *, region: str | None = None) -> np.ndarray:
+        per_t = self._pick_per_t() if region is None else self._per_name[region]
+        T_sel = _as_index_list(self._t_idx, len(self))
+        N0 = next((a.shape[0] for a in per_t if a is not None), 0)
+        C0 = self.meta.ncomp
+        N_sel = _shape_from_slice(N0, self._node_idx)
+        C_sel = _shape_from_slice(C0, self._comp_idx)
+
+        def _one(k: int) -> np.ndarray:
+            a = per_t[k]
+            if a is None:
+                return np.full((N_sel, C_sel), np.nan, dtype=np.float32)
+            out = a
+            if self._node_idx is not None:
+                out = out[self._node_idx, :]  # type: ignore[index]
+            if self._comp_idx is not None:
+                out = out[..., self._comp_idx]  # type: ignore[index]
+            out = np.asarray(out, dtype=np.float32)
+            if out.ndim == 1:
+                out = out.reshape(1, -1) if N_sel == 1 else out.reshape(-1, 1)
+            return out
+
+        if len(T_sel) == 1 and isinstance(self._t_idx, int):
+            return _one(T_sel[0])
+        return np.stack([_one(k) for k in T_sel], axis=0)
+
+    def __repr__(self) -> str:
+        names = list(self._per_name.keys())
+        T = len(self)
+        if len(names) == 1:
+            name = names[0]
+            per_t = self._per_name[name]
+            N = next((a.shape[0] for a in per_t if a is not None), 0)
+            C = next((a.shape[1] for a in per_t if a is not None), self.meta.ncomp)
+            missing = sum(1 for a in per_t if a is None)
+            return f"NodeRegionResultView(name={self.meta.name!r}, region={name!r}, T={T}, N={N}, C={C}, missing={missing})"
+        parts = []
+        for d in sorted(names):
+            per_t = self._per_name[d]
+            N = next((a.shape[0] for a in per_t if a is not None), 0)
+            C = next((a.shape[1] for a in per_t if a is not None), self.meta.ncomp)
+            missing = sum(1 for a in per_t if a is None)
+            parts.append(f"{d}:N={N},C={C},missing={missing}")
+        return (
+            f"NodeRegionResultView(name={self.meta.name!r}, T={T}, regions={len(names)} | "
+            + "; ".join(parts)
+            + ")"
+        )
 
     __str__ = __repr__
 
@@ -580,7 +689,8 @@ class RegionResultView(_BaseView):
 class Results:
     def __init__(self, times: Iterable[float]):
         self._times = np.asarray(list(times), float)
-        self.node: Dict[str, NodeResultView] = {}
+        self.node: Dict[str, NodeResultView] = {}  # global nodal
+        self.node_region: Dict[str, NodeRegionResultView] = {}  # nodal per-domain
         self.elem_item: Dict[str, ItemResultView] = {}
         self.face_item: Dict[str, ItemResultView] = {}
         self.elem_mult: Dict[str, MultResultView] = {}
@@ -595,11 +705,23 @@ class Results:
     def times(self) -> np.ndarray:
         return self._times
 
-    def register_node(
+    def register_node_global(
         self, name: str, meta: _FieldMeta, per_t: List[np.ndarray | None], mesh: Mesh
     ):
         self._meta[name] = meta
         self.node[name] = NodeResultView(meta, self._times, per_t, mesh)
+
+    def register_node_region(
+        self,
+        name: str,
+        meta: _FieldMeta,
+        per_name: Dict[str, List[np.ndarray | None]],
+        region_nodes: Dict[str, np.ndarray],
+    ):
+        self._meta[name] = meta
+        self.node_region[name] = NodeRegionResultView(
+            meta, self._times, per_name, region_nodes
+        )
 
     def register_item(
         self,
@@ -646,6 +768,8 @@ class Results:
     def __getitem__(self, key: str):
         if key in self.node:
             return self.node[key]
+        if key in self.node_region:
+            return self.node_region[key]
         if key in self.elem_item:
             return self.elem_item[key]
         if key in self.face_item:
@@ -663,7 +787,7 @@ class Results:
     def __repr__(self) -> str:
         return (
             f"Results(ntimes={len(self)}, "
-            f"node={len(self.node)}, "
+            f"node={len(self.node)}, node_region={len(self.node_region)}, "
             f"elem_item={len(self.elem_item)}, elem_mult={len(self.elem_mult)}, elem_region={len(self.elem_region)}, "
             f"face_item={len(self.face_item)}, face_mult={len(self.face_mult)}, face_region={len(self.face_region)})"
         )
@@ -675,7 +799,7 @@ class Results:
 
 
 class xplt:
-    """FEBio .xplt reader with FMT_NODE, FMT_ITEM, FMT_MULT, FMT_REGION support."""
+    """FEBio .xplt reader with FMT_NODE (global and per-domain), FMT_ITEM, FMT_MULT, FMT_REGION."""
 
     def __init__(self, filename: str):
         self._reader = BinaryReader(filename)
@@ -691,12 +815,8 @@ class xplt:
         # ids and ordinals
         self._part_id2name: Dict[int, str] = {}
         self._surf_id2name: Dict[int, str] = {}
-        self._dom_idx2name: Dict[
-            int, str
-        ] = {}  # 0-based ordinal from PLT_DOMAIN order -> domain name
-        self._surf_idx2name: Dict[
-            int, str
-        ] = {}  # 0-based ordinal from PLT_SURFACE order -> surface name
+        self._dom_idx2name: Dict[int, str] = {}  # PLT_DOMAIN ordinal -> domain name
+        self._surf_idx2name: Dict[int, str] = {}  # PLT_SURFACE ordinal -> surface name
 
         # mesh accumulators
         self._nodes_xyz: np.ndarray | None = None
@@ -707,7 +827,8 @@ class xplt:
         self._nodesets_map: Dict[str, np.ndarray] = {}
 
         # result buffers
-        self._buf_node: Dict[str, List[np.ndarray | None]] = {}
+        self._buf_node_global: Dict[str, List[np.ndarray | None]] = {}
+        self._buf_node_region: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
         self._buf_elem_item: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
         self._buf_elem_mult: Dict[str, Dict[str, List[MultBlock | None]]] = {}
         self._buf_elem_region: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
@@ -716,7 +837,8 @@ class xplt:
         self._buf_face_region: Dict[str, Dict[str, List[np.ndarray | None]]] = {}
 
         # per-state scratch
-        self._state_node_seen: Dict[str, np.ndarray] = {}
+        self._state_node_global_seen: Dict[str, np.ndarray] = {}
+        self._state_node_region_seen: Dict[str, Dict[str, np.ndarray]] = {}
         self._state_elem_item_seen: Dict[str, Dict[str, np.ndarray]] = {}
         self._state_elem_mult_seen: Dict[str, Dict[str, MultBlock]] = {}
         self._state_elem_region_seen: Dict[str, Dict[str, np.ndarray]] = {}
@@ -727,6 +849,7 @@ class xplt:
         # parse header+dict+mesh
         self._read_xplt()
         self.mesh = self._build_mesh()
+        self._domain_nodes: Dict[str, np.ndarray] = self._compute_domain_nodes()
 
         self.version: int
         self.compression: int
@@ -928,6 +1051,22 @@ class xplt:
             nodesets=nodesets,
         )
 
+    def _compute_domain_nodes(self) -> Dict[str, np.ndarray]:
+        """Domain -> unique global node indices used by its elements (order-preserving best-effort)."""
+        out: Dict[str, np.ndarray] = {}
+        conn = self.mesh.elements.conn
+        nper = self.mesh.elements.nper
+        for dname, eids in self.mesh.parts.items():
+            ids: List[int] = []
+            for e in np.asarray(eids, dtype=np.int64):
+                k = int(nper[e])
+                if k > 0:
+                    ids.extend(conn[e, :k].tolist())
+            seen: set[int] = set()
+            order = [i for i in ids if (i not in seen and not seen.add(i))]
+            out[dname] = np.asarray(order, dtype=np.int64)
+        return out
+
     # dictionary
 
     def _readDictStream(self, dictType: str, kind: str):
@@ -960,7 +1099,8 @@ class xplt:
         self._readDictStream("PLT_DIC_SURFACE", "face")
 
         self._field_meta.clear()
-        self._buf_node.clear()
+        self._buf_node_global.clear()
+        self._buf_node_region.clear()
         self._buf_elem_item.clear()
         self._buf_elem_mult.clear()
         self._buf_elem_region.clear()
@@ -975,7 +1115,8 @@ class xplt:
             self._field_meta[name] = fm
             kind = self._where[name]
             if kind == "node" and fmt == Storage_Fmt.FMT_NODE:
-                self._buf_node[name] = []
+                self._buf_node_global[name] = []
+                self._buf_node_region[name] = {}
             elif kind == "elem":
                 if fmt == Storage_Fmt.FMT_ITEM:
                     self._buf_elem_item[name] = {}
@@ -1007,12 +1148,18 @@ class xplt:
         return out
 
     def _flush_state_missing(self):
-        # nodal
-        for v in self._buf_node.keys():
-            self._buf_node[v].append(self._state_node_seen.get(v, None))
-
+        # node global
+        for v in self._buf_node_global.keys():
+            self._buf_node_global[v].append(self._state_node_global_seen.get(v, None))
+        # node per-region
         dom_names = list(self._dom_idx2name.values())
-        surf_names = list(self._surf_idx2name.values())
+        for v in list(self._buf_node_region.keys()):
+            if not self._buf_node_region[v]:
+                for d in dom_names:
+                    self._buf_node_region[v][d] = []
+            seen = self._state_node_region_seen.get(v, {})
+            for d in self._buf_node_region[v].keys():
+                self._buf_node_region[v][d].append(seen.get(d, None))
 
         # elem item/mult/region
         for v in list(self._buf_elem_item.keys()):
@@ -1040,6 +1187,7 @@ class xplt:
                 self._buf_elem_region[v][d].append(seen.get(d, None))
 
         # face item/mult/region
+        surf_names = list(self._surf_idx2name.values())
         for v in list(self._buf_face_item.keys()):
             if not self._buf_face_item[v]:
                 for s in surf_names:
@@ -1065,7 +1213,8 @@ class xplt:
                 self._buf_face_region[v][s].append(seen.get(s, None))
 
         # clear scratch
-        self._state_node_seen.clear()
+        self._state_node_global_seen.clear()
+        self._state_node_region_seen.clear()
         self._state_elem_item_seen.clear()
         self._state_elem_mult_seen.clear()
         self._state_elem_region_seen.clear()
@@ -1103,17 +1252,24 @@ class xplt:
                 if nrows <= 0:
                     continue
 
-                # NODAL (whole model or nodal region)
+                # NODAL (global or per-domain)
                 if kind == "node" and meta.fmt == Storage_Fmt.FMT_NODE:
                     block = np.frombuffer(
                         self._reader.read(4 * C * nrows), dtype=np.float32
                     ).reshape(nrows, C)
-                    self._state_node_seen[dictKey] = block
+                    rid = reg_raw - 1
+                    rname = self._dom_idx2name.get(rid)
+                    if rname is not None:
+                        self._state_node_region_seen.setdefault(dictKey, {})[rname] = (
+                            block
+                        )
+                    else:
+                        self._state_node_global_seen[dictKey] = block
                     continue
 
-                # resolve region name + nper
+                # resolve region name + nper for elem/face
                 if kind == "elem":
-                    rid = reg_raw - 1  # domain ordinal
+                    rid = reg_raw - 1
                     rname = self._dom_idx2name.get(rid, f"domain_{rid}")
                     elem_ids = np.asarray(
                         self._parts_map.get(rname, []), dtype=np.int64
@@ -1124,7 +1280,7 @@ class xplt:
                         else np.zeros((0,), dtype=np.int64)
                     )
                 else:
-                    rid = reg_raw - 1  # surface ordinal
+                    rid = reg_raw - 1
                     rname = self._surf_idx2name.get(
                         rid, self._surf_id2name.get(rid, f"surface_{rid}")
                     )
@@ -1181,7 +1337,7 @@ class xplt:
                         )
                     continue
 
-                # skip mismatched format
+                # skip mismatched
                 self._reader.seek(self._reader.tell() + 4 * C * nrows, SEEK_SET)
 
     def _readState(self) -> int:
@@ -1239,12 +1395,23 @@ class xplt:
         times = np.asarray(self._time, float)
         self.results = Results(times)
 
-        # node
-        for name, per_t in self._buf_node.items():
-            sizes = {a.shape[0] for a in per_t if a is not None}
-            if len(sizes) > 1:
-                raise ValueError(f"{name}: inconsistent nodal row count over time")
-            self.results.register_node(name, self._field_meta[name], per_t, self.mesh)
+        # node global
+        for name, per_t in self._buf_node_global.items():
+            if any(a is not None for a in per_t):
+                sizes = {a.shape[0] for a in per_t if a is not None}
+                if len(sizes) > 1:
+                    raise ValueError(f"{name}: inconsistent nodal row count over time")
+                self.results.register_node_global(
+                    name, self._field_meta[name], per_t, self.mesh
+                )
+
+        # node region
+        for name, per_name in self._buf_node_region.items():
+            has_any = any(any(a is not None for a in lst) for lst in per_name.values())
+            if has_any:
+                self.results.register_node_region(
+                    name, self._field_meta[name], per_name, self._domain_nodes
+                )
 
         # elem
         for name, per_name in self._buf_elem_item.items():
@@ -1263,7 +1430,8 @@ class xplt:
             self.results.register_region("face", name, self._field_meta[name], per_name)
 
         # clear
-        self._buf_node.clear()
+        self._buf_node_global.clear()
+        self._buf_node_region.clear()
         self._buf_elem_item.clear()
         self._buf_elem_mult.clear()
         self._buf_elem_region.clear()
