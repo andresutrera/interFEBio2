@@ -324,9 +324,9 @@ class Mesh:
             # Decide type label: if mixed, use first
             etype = str(np.unique(part.etype)[0]) if len(part) else "unknown"
             el = ET.Element("Elements", type=etype, name=pname)
-            for j in range(len(part)):
-                nodes = (part.nodes_of(j) + 1).tolist()
-                e_el = ET.Element("elem", id=str(j + 1))
+            for local_idx, global_idx in enumerate(eidx):
+                nodes = (part.nodes_of(local_idx) + 1).tolist()
+                e_el = ET.Element("elem", id=str(int(global_idx) + 1))
                 e_el.text = ",".join(map(str, nodes))
                 el.append(e_el)
             out.append(el)
