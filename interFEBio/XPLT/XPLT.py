@@ -1063,7 +1063,11 @@ class xplt:
                 if k > 0:
                     ids.extend(conn[e, :k].tolist())
             seen: set[int] = set()
-            order = [i for i in ids if (i not in seen and not seen.add(i))]
+            order: List[int] = []
+            for i in ids:
+                if i not in seen:
+                    seen.add(i)
+                    order.append(i)
             out[dname] = np.asarray(order, dtype=np.int64)
         return out
 

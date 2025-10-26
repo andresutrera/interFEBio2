@@ -3,14 +3,20 @@ from __future__ import annotations
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Sequence,
+)
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from interFEBio.XPLT import xplt
 
 # ----------------------------------------------------------------------
 # Low-level tables with slice-first APIs
 # ----------------------------------------------------------------------
+
 
 @dataclass
 class NodeArray:
@@ -36,13 +42,13 @@ class NodeArray:
 
     def __len__(self) -> int:
         """Number of nodes."""
-        return self.xyz.shape[0]
+        return int(self.xyz.shape[0])
 
-    def __getitem__(self, idx: slice | int | np.ndarray | List[int]) -> NodeArray:
+    def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> NodeArray:
         """Return a sliced view."""
         return NodeArray(self.xyz[idx])
 
-    def take(self, ids: np.ndarray | List[int]) -> NodeArray:
+    def take(self, ids: np.ndarray | list[int]) -> NodeArray:
         """Return a new node table with selected node ids."""
         return NodeArray(self.xyz[np.asarray(ids, dtype=np.int64)])
 
@@ -76,14 +82,17 @@ class ElementArray:
         self.conn = c
         self.nper = np.asanyarray(self.nper, dtype=np.int64).reshape(-1)
         self.etype = np.asanyarray(self.etype)
-        if self.conn.shape[0] != self.nper.shape[0] or self.conn.shape[0] != self.etype.shape[0]:
+        if (
+            self.conn.shape[0] != self.nper.shape[0]
+            or self.conn.shape[0] != self.etype.shape[0]
+        ):
             raise ValueError("conn, nper, etype length mismatch")
 
     def __len__(self) -> int:
         """Number of elements."""
-        return self.conn.shape[0]
+        return int(self.conn.shape[0])
 
-    def __getitem__(self, idx: slice | int | np.ndarray | List[int]) -> ElementArray:
+    def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> ElementArray:
         """Return a sliced view."""
         return ElementArray(self.conn[idx], self.nper[idx], self.etype[idx])
 
@@ -99,7 +108,7 @@ class ElementArray:
         valid = self._mask_valid()
         return np.unique(self.conn[valid])
 
-    def as_ragged(self) -> List[np.ndarray]:
+    def as_ragged(self) -> list[np.ndarray]:
         """Return Python list of 1D arrays per element."""
         return [self.nodes_of(i) for i in range(len(self))]
 
@@ -136,9 +145,9 @@ class SurfaceArray:
 
     def __len__(self) -> int:
         """Number of facets."""
-        return self.faces.shape[0]
+        return int(self.faces.shape[0])
 
-    def __getitem__(self, idx: slice | int | np.ndarray | List[int]) -> SurfaceArray:
+    def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> SurfaceArray:
         """Return a sliced view."""
         return SurfaceArray(self.faces[idx], self.nper[idx])
 
@@ -164,6 +173,7 @@ class SurfaceArray:
 # Mesh container with isolated subsystems and name-first access
 # ----------------------------------------------------------------------
 
+
 class Mesh:
     """Unified mesh container with isolated node, element, and surface tables.
 
@@ -186,9 +196,9 @@ class Mesh:
 
     nodes: NodeArray
     elements: ElementArray
-    parts: Dict[str, np.ndarray]
-    surfaces: Dict[str, SurfaceArray]
-    nodesets: Dict[str, np.ndarray]
+    parts: dict[str, np.ndarray]
+    surfaces: dict[str, SurfaceArray]
+    nodesets: dict[str, np.ndarray]
 
     # -------------- construction --------------
 
@@ -196,16 +206,24 @@ class Mesh:
         self,
         nodes: NodeArray,
         elements: ElementArray,
-        parts: Dict[str, np.ndarray] | None = None,
-        surfaces: Dict[str, SurfaceArray] | None = None,
-        nodesets: Dict[str, np.ndarray] | None = None,
+        parts: dict[str, np.ndarray] | None = None,
+        surfaces: dict[str, SurfaceArray] | None = None,
+        nodesets: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Initialize the mesh."""
         self.nodes = nodes
         self.elements = elements
-        self.parts = {} if parts is None else {k: np.asarray(v, dtype=np.int64) for k, v in parts.items()}
+        self.parts = (
+            {}
+            if parts is None
+            else {k: np.asarray(v, dtype=np.int64) for k, v in parts.items()}
+        )
         self.surfaces = {} if surfaces is None else dict(surfaces)
-        self.nodesets = {} if nodesets is None else {k: np.asarray(v, dtype=np.int64) for k, v in nodesets.items()}
+        self.nodesets = (
+            {}
+            if nodesets is None
+            else {k: np.asarray(v, dtype=np.int64) for k, v in nodesets.items()}
+        )
 
     # -------------- simple queries --------------
 
@@ -219,7 +237,7 @@ class Mesh:
         """Number of nodes in the mesh."""
         return len(self.nodes)
 
-    def bounds(self) -> Tuple[np.ndarray, np.ndarray]:
+    def bounds(self) -> tuple[np.ndarray, np.ndarray]:
         """Axis-aligned bounding box."""
         return self.nodes.xyz.min(0), self.nodes.xyz.max(0)
 
@@ -292,15 +310,15 @@ class Mesh:
             root.append(node_el)
         return root
 
-    def to_feb_elements_xml(self) -> List[ET.Element]:
+    def to_feb_elements_xml(self) -> list[ET.Element]:
         """Build one FEBio ``<Elements>`` element per part.
 
         Returns
         -------
         list
-            List of ``<Elements>`` elements.
+            list of ``<Elements>`` elements.
         """
-        out: List[ET.Element] = []
+        out: list[ET.Element] = []
         for pname, eidx in self.parts.items():
             part = self.elements[eidx]
             # Decide type label: if mixed, use first
@@ -314,15 +332,15 @@ class Mesh:
             out.append(el)
         return out
 
-    def to_feb_surfaces_xml(self) -> List[ET.Element]:
+    def to_feb_surfaces_xml(self) -> list[ET.Element]:
         """Build one FEBio ``<Surface>`` per named surface.
 
         Returns
         -------
         list
-            List of ``<Surface>`` elements.
+            list of ``<Surface>`` elements.
         """
-        out: List[ET.Element] = []
+        out: list[ET.Element] = []
         for sname, surf in self.surfaces.items():
             el = ET.Element("Surface", name=sname)
             for i in range(len(surf)):
@@ -334,15 +352,15 @@ class Mesh:
             out.append(el)
         return out
 
-    def to_feb_nodesets_xml(self) -> List[ET.Element]:
+    def to_feb_nodesets_xml(self) -> list[ET.Element]:
         """Build FEBio ``<NodeSet>`` elements.
 
         Returns
         -------
         list
-            List of ``<NodeSet>`` elements.
+            list of ``<NodeSet>`` elements.
         """
-        out: List[ET.Element] = []
+        out: list[ET.Element] = []
         for nname, nids in self.nodesets.items():
             el = ET.Element("NodeSet", name=nname)
             el.text = ",".join(map(str, (nids + 1).tolist()))
@@ -355,7 +373,7 @@ class Mesh:
     def from_gmsh_msh(
         cls,
         path: str,
-        include: Optional[Sequence[str]] = None,
+        include: Sequence[str] | None = None,
         scale: Sequence[float] | np.ndarray = (1.0, 1.0, 1.0),
         quiet: bool = False,
     ) -> Mesh:
@@ -380,7 +398,7 @@ class Mesh:
         with open(path, "r", encoding="utf-8") as f:
             lines = [ln.strip() for ln in f]
 
-        def _section(tag: str) -> List[str]:
+        def _section(tag: str) -> list[str]:
             a = lines.index(f"${tag}") + 1
             n = int(lines[a])
             return lines[a + 1 : a + 1 + n]
@@ -392,7 +410,7 @@ class Mesh:
         # Physical names
         dim_map = {0: "node", 1: "line", 2: "surface", 3: "volume"}
         phys_raw = _section("PhysicalNames")
-        phys: Dict[int, Tuple[str, str]] = {}
+        phys: dict[int, tuple[str, str]] = {}
         for r in phys_raw:
             d, pid, name = int(r.split()[0]), int(r.split()[1]), r.split('"')[1]
             phys[pid] = (name, dim_map[d])
@@ -411,15 +429,25 @@ class Mesh:
 
         # Elements
         _GMSH_TO_ELEM = {
-            1: "line2", 2: "tri3", 3: "quad4", 4: "tet4", 5: "hex8", 6: "penta6",
-            8: "line3", 9: "tri6", 10: "quad8", 11: "tet10", 12: "hex20", 16: "penta15",
+            1: "line2",
+            2: "tri3",
+            3: "quad4",
+            4: "tet4",
+            5: "hex8",
+            6: "penta6",
+            8: "line3",
+            9: "tri6",
+            10: "quad8",
+            11: "tet10",
+            12: "hex20",
+            16: "penta15",
         }
         elem_rows = _section("Elements")
-        conn_list: List[np.ndarray] = []
-        etypes: List[str] = []
-        part_map: Dict[str, List[int]] = {}
-        surf_map: Dict[str, List[np.ndarray]] = {}
-        nset_map: Dict[str, set[int]] = {}
+        conn_list: list[np.ndarray] = []
+        etypes: list[str] = []
+        part_map: dict[str, list[int]] = {}
+        surf_map: dict[str, list[np.ndarray]] = {}
+        nset_map: dict[str, set[int]] = {}
 
         include_set = set(include) if include is not None else None
 
@@ -457,12 +485,14 @@ class Mesh:
         for i, c in enumerate(conn_list):
             conn[i, : c.size] = c
             nper[i] = c.size
-        elements = ElementArray(conn=conn, nper=nper, etype=np.asarray(etypes, dtype=object))
+        elements = ElementArray(
+            conn=conn, nper=nper, etype=np.asarray(etypes, dtype=object)
+        )
 
         parts = {k: np.asarray(v, dtype=np.int64) for k, v in part_map.items()}
 
         # Surfaces padded
-        surfaces: Dict[str, SurfaceArray] = {}
+        surfaces: dict[str, SurfaceArray] = {}
         for name, lst in surf_map.items():
             kk = max((len(a) for a in lst), default=0)
             F = len(lst)
@@ -473,71 +503,59 @@ class Mesh:
                 nps[i] = a.size
             surfaces[name] = SurfaceArray(faces=faces, nper=nps)
 
-        nodesets = {k: np.fromiter(sorted(v), dtype=np.int64) for k, v in nset_map.items()}
+        nodesets = {
+            k: np.fromiter(sorted(v), dtype=np.int64) for k, v in nset_map.items()
+        }
 
-        return cls(nodes=nodes, elements=elements, parts=parts, surfaces=surfaces, nodesets=nodesets)
+        return cls(
+            nodes=nodes,
+            elements=elements,
+            parts=parts,
+            surfaces=surfaces,
+            nodesets=nodesets,
+        )
 
     @classmethod
-    def from_xplt(cls, xplt_reader: object) -> Mesh:
+    def from_xplt(cls, xplt_reader: xplt) -> Mesh:
         """Create from an ``xplt`` reader that already parsed the mesh.
 
         Args
         ----
         xplt_reader
-            Instance with ``mesh`` attribute holding ``domain``, ``surface``,
-            ``nodeset``, and ``parts`` as in your current reader.
+            Reader whose ``mesh`` attribute is an instance of :class:`Mesh`.
+            This method clones that mesh into a detached copy so later edits
+            do not mutate the reader's internal buffers.
 
         Returns
         -------
         Mesh
             New instance.
         """
-        xm = xplt_reader.mesh  # domainClass, surfaceClass, nodesetClass, partClass
-        nodes = NodeArray(np.asarray(xm.nodes, dtype=float))
+        xm = xplt_reader.mesh
 
-        conn_list: List[np.ndarray] = []
-        etypes: List[str] = []
-        parts_tmp: Dict[str, List[int]] = {}
+        if isinstance(xm, Mesh):
+            return cls(
+                nodes=NodeArray(np.array(xm.nodes.xyz, copy=True)),
+                elements=ElementArray(
+                    conn=np.array(xm.elements.conn, copy=True),
+                    nper=np.array(xm.elements.nper, copy=True),
+                    etype=np.array(xm.elements.etype, copy=True),
+                ),
+                parts={
+                    name: np.array(ids, dtype=np.int64, copy=True)
+                    for name, ids in xm.parts.items()
+                },
+                surfaces={
+                    name: SurfaceArray(
+                        faces=np.array(surf.faces, copy=True),
+                        nper=np.array(surf.nper, copy=True),
+                    )
+                    for name, surf in xm.surfaces.items()
+                },
+                nodesets={
+                    name: np.array(ids, dtype=np.int64, copy=True)
+                    for name, ids in xm.nodesets.items()
+                },
+            )
 
-        def _etype_name(s: str) -> str:
-            s = s.upper().removeprefix("FE_")
-            for pref in ("TET", "HEX", "PENTA", "TRI", "QUAD", "LINE"):
-                if s.startswith(pref):
-                    return pref.lower() + s[len(pref):].lower()
-            return s.lower()
-
-        for dom in xm.domain.values():
-            et = _etype_name(dom.elemType)
-            for _, nids in dom.elements.items():
-                conn_list.append(np.asarray(nids, dtype=np.int64) - 1)
-                etypes.append(et)
-                parts_tmp.setdefault(dom.name or f"part_{dom.domainID}", []).append(len(etypes) - 1)
-
-        kmax = max((len(c) for c in conn_list), default=0)
-        conn = -np.ones((len(conn_list), kmax), dtype=np.int64)
-        nper = np.zeros((len(conn_list),), dtype=np.int64)
-        for i, c in enumerate(conn_list):
-            conn[i, : c.size] = c
-            nper[i] = c.size
-        elements = ElementArray(conn=conn, nper=nper, etype=np.asarray(etypes, dtype=object))
-        parts = {k: np.asarray(v, dtype=np.int64) for k, v in parts_tmp.items()}
-
-        surfaces: Dict[str, SurfaceArray] = {}
-        for srf in xm.surface.values():
-            if len(srf.faces) == 0:
-                continue
-            faces_list = [np.asarray(v, dtype=np.int64) - 1 for _, v in srf.faces.items()]
-            kk = max((len(a) for a in faces_list), default=0)
-            F = len(faces_list)
-            faces = -np.ones((F, kk), dtype=np.int64)
-            nps = np.zeros((F,), dtype=np.int64)
-            for i, a in enumerate(faces_list):
-                faces[i, : a.size] = a
-                nps[i] = a.size
-            surfaces[srf.name or f"surface_{id(srf)}"] = SurfaceArray(faces=faces, nper=nps)
-
-        nodesets: Dict[str, np.ndarray] = {}
-        for ns in xm.nodeset.values():
-            nodesets[ns.name or f"nodeset_{id(ns)}"] = np.asarray(ns.nodes, dtype=np.int64) - 1
-
-        return cls(nodes=nodes, elements=elements, parts=parts, surfaces=surfaces, nodesets=nodesets)
+        raise TypeError("xplt.mesh is not compatible with Mesh.from_xplt")

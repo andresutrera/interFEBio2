@@ -49,9 +49,8 @@ CORE_HELPER_IDENTIFIERS: set[str] = {
 }
 
 
-
 PARAM_FLAG_MAP = {
-    'FE_PARAM_HIDDEN': 0x04,
+    "FE_PARAM_HIDDEN": 0x04,
 }
 
 
@@ -302,7 +301,7 @@ def _format_array_type(base: str, length: int) -> str:
 def _extract_flag_bits(tokens: Sequence[Any]) -> int:
     total = 0
     for token in tokens:
-        for part in str(token).split('|'):
+        for part in str(token).split("|"):
             entry = part.strip()
             if not entry:
                 continue
@@ -311,7 +310,7 @@ def _extract_flag_bits(tokens: Sequence[Any]) -> int:
                 continue
             except ValueError:
                 pass
-            name = entry.split('::')[-1]
+            name = entry.split("::")[-1]
             bit = PARAM_FLAG_MAP.get(name)
             if bit is not None:
                 total |= bit
@@ -319,10 +318,12 @@ def _extract_flag_bits(tokens: Sequence[Any]) -> int:
 
 
 def _has_hidden_flag(param: Mapping[str, Any]) -> bool:
-    for call in param.get('chain', []):
-        if call.get('func') != 'SetFlags':
+    for call in param.get("chain", []):
+        if call.get("func") != "SetFlags":
             continue
-        if _extract_flag_bits(call.get('args', [])) & PARAM_FLAG_MAP.get('FE_PARAM_HIDDEN', 0):
+        if _extract_flag_bits(call.get("args", [])) & PARAM_FLAG_MAP.get(
+            "FE_PARAM_HIDDEN", 0
+        ):
             return True
     return False
 
@@ -355,7 +356,14 @@ def _infer_numeric_python_type(
                 pass
 
     if range_spec and isinstance(range_spec, dict):
-        for key in ("min", "max", "not_equal", "min_expr", "max_expr", "not_equal_expr"):
+        for key in (
+            "min",
+            "max",
+            "not_equal",
+            "min_expr",
+            "max_expr",
+            "not_equal_expr",
+        ):
             _collect(range_spec.get(key))
     _collect(raw_default)
     if coerced_default is not _DEFAULT_SENTINEL:
@@ -363,7 +371,10 @@ def _infer_numeric_python_type(
 
     if not candidates:
         return None
-    if any(isinstance(value, float) and not float(value).is_integer() for value in candidates):
+    if any(
+        isinstance(value, float) and not float(value).is_integer()
+        for value in candidates
+    ):
         return "float"
     if any(isinstance(value, float) for value in candidates):
         return "float"
@@ -436,7 +447,11 @@ def _extract_enum_values(param: Mapping[str, Any]) -> list[str] | None:
 
     enum_meta = param.get("enum")
     if isinstance(enum_meta, list):
-        filtered = [token for token in enum_meta if isinstance(token, str) and not token.startswith("$(")]
+        filtered = [
+            token
+            for token in enum_meta
+            if isinstance(token, str) and not token.startswith("$(")
+        ]
         return filtered or None
     if isinstance(enum_meta, str):
         return None if enum_meta.startswith("$(") else [enum_meta]
@@ -562,7 +577,7 @@ def _match_enum_default(
 
 def _evaluate_numeric_expr(expr: str) -> Fraction | float | int | None:
     try:
-        node = ast.parse(expr, mode='eval').body
+        node = ast.parse(expr, mode="eval").body
     except SyntaxError:
         return None
 
@@ -572,7 +587,9 @@ def _evaluate_numeric_expr(expr: str) -> Fraction | float | int | None:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             operand = _eval(node.operand)
             return +operand if isinstance(node.op, ast.UAdd) else -operand
-        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)):
+        if isinstance(node, ast.BinOp) and isinstance(
+            node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)
+        ):
             left = _eval(node.left)
             right = _eval(node.right)
             if isinstance(node.op, ast.Add):
@@ -603,7 +620,7 @@ def _evaluate_numeric_expr(expr: str) -> Fraction | float | int | None:
 def _format_range_value(value: Any) -> str:
     if isinstance(value, (int, float)):
         text = repr(value)
-        if text.endswith('.0'):
+        if text.endswith(".0"):
             text = text[:-2]
         return text
     if isinstance(value, str):
@@ -629,59 +646,57 @@ def _build_range_annotation_payload(spec: Any) -> str | None:
     if not isinstance(spec, dict):
         return None
     parts: list[str] = []
-    min_value = _coerce_range_number(spec.get('min'))
+    min_value = _coerce_range_number(spec.get("min"))
     if min_value is not None:
         parts.append(f"min={min_value!r}")
         parts.append(f"min_inclusive={spec.get('min_inclusive', True)!r}")
-    elif spec.get('min') is not None:
+    elif spec.get("min") is not None:
         parts.append(f"min_expr={spec['min']!r}")
         parts.append(f"min_inclusive={spec.get('min_inclusive', True)!r}")
-    max_value = _coerce_range_number(spec.get('max'))
+    max_value = _coerce_range_number(spec.get("max"))
     if max_value is not None:
         parts.append(f"max={max_value!r}")
         parts.append(f"max_inclusive={spec.get('max_inclusive', True)!r}")
-    elif spec.get('max') is not None:
+    elif spec.get("max") is not None:
         parts.append(f"max_expr={spec['max']!r}")
         parts.append(f"max_inclusive={spec.get('max_inclusive', True)!r}")
-    not_equal = _coerce_range_number(spec.get('not_equal'))
+    not_equal = _coerce_range_number(spec.get("not_equal"))
     if not_equal is not None:
         parts.append(f"not_equal={not_equal!r}")
-    elif spec.get('not_equal') is not None:
+    elif spec.get("not_equal") is not None:
         parts.append(f"not_equal_expr={spec['not_equal']!r}")
-    raw = spec.get('raw_args')
+    raw = spec.get("raw_args")
     if raw is not None:
         parts.append(f"raw={raw!r}")
     if not parts:
         return None
-    args = ', '.join(parts)
+    args = ", ".join(parts)
     return f"RangeSpec({args})"
 
 
 def _format_range_predicate(spec: Any) -> str | None:
     if not isinstance(spec, dict):
         return None
-    min_val = spec.get('min')
-    max_val = spec.get('max')
-    not_equal = spec.get('not_equal')
+    min_val = spec.get("min")
+    max_val = spec.get("max")
+    not_equal = spec.get("not_equal")
     parts: list[str] = []
     if min_val is not None and max_val is not None:
-        left = '<=' if spec.get('min_inclusive', True) else '<'
-        right = '<=' if spec.get('max_inclusive', True) else '<'
-        return (
-            f"{_format_range_value(min_val)} {left} value {right} {_format_range_value(max_val)}"
-        )
+        left = "<=" if spec.get("min_inclusive", True) else "<"
+        right = "<=" if spec.get("max_inclusive", True) else "<"
+        return f"{_format_range_value(min_val)} {left} value {right} {_format_range_value(max_val)}"
     if min_val is not None:
-        op = '>=' if spec.get('min_inclusive', True) else '>'
+        op = ">=" if spec.get("min_inclusive", True) else ">"
         parts.append(f"value {op} {_format_range_value(min_val)}")
     if max_val is not None:
-        op = '<=' if spec.get('max_inclusive', True) else '<'
+        op = "<=" if spec.get("max_inclusive", True) else "<"
         parts.append(f"value {op} {_format_range_value(max_val)}")
     if not_equal is not None:
         parts.append(f"value != {_format_range_value(not_equal)}")
-    raw = spec.get('raw_args')
+    raw = spec.get("raw_args")
     if raw is not None and not parts:
         parts.append(f"range({raw})")
-    return ' and '.join(parts) if parts else None
+    return " and ".join(parts) if parts else None
 
 
 _IDENTIFIER_REGEX = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -733,7 +748,9 @@ class ParameterDefinition:
 
         meta_for_render = dict(self.metadata)
         if "default" in meta_for_render:
-            meta_for_render["default"] = _format_metadata_default(meta_for_render["default"])
+            meta_for_render["default"] = _format_metadata_default(
+                meta_for_render["default"]
+            )
         metadata_repr = repr(meta_for_render)
         type_expression = self.type_expression()
         if self.default_expr is not None:
@@ -774,6 +791,14 @@ class EnumDefinition:
 
 
 @dataclass(slots=True)
+class ModuleRenderResult:
+    """Container holding the rendered module text and its exports."""
+
+    text: str
+    exports: list[str]
+
+
+@dataclass(slots=True)
 class ManifestItem:
     """Single entry describing how to expose a FEBio class to Python."""
 
@@ -803,6 +828,11 @@ class MetadataRepository:
         """
 
         return self._entries[class_name]
+
+    def has(self, class_name: str) -> bool:
+        """Return whether metadata is available for ``class_name``."""
+
+        return class_name in self._entries
 
 
 class TypeResolver:
@@ -944,7 +974,10 @@ class ClassRenderer:
         base_class = self._resolver.resolve_base(
             self._manifest.category, self._metadata
         )
-        header = ["@dataclass(kw_only=True)", f"class {self._manifest.python_name}({base_class}):"]
+        header = [
+            "@dataclass(kw_only=True)",
+            f"class {self._manifest.python_name}({base_class}):",
+        ]
         fe_type = self._metadata.get("registration") or self._metadata["class"]
 
         field_definitions = self._parameters()
@@ -953,9 +986,7 @@ class ClassRenderer:
             enum_blocks.append(f"    class {enum_def.name}(Enum):")
             if enum_def.members:
                 for member in enum_def.members:
-                    enum_blocks.append(
-                        f"        {member.name} = {member.value!r}"
-                    )
+                    enum_blocks.append(f"        {member.name} = {member.value!r}")
             else:
                 enum_blocks.append("        pass")
             enum_blocks.append("")
@@ -973,9 +1004,7 @@ class ClassRenderer:
                 body_lines.append("")
         if fields_src:
             body_lines.extend(fields_src)
-        body_lines.append(
-            f"    fe_class: str = field(init=False, default={fe_type!r})"
-        )
+        body_lines.append(f"    fe_class: str = field(init=False, default={fe_type!r})")
         body_lines.append(
             f"    xml_tag: str = field(init=False, default={self._manifest.xml_tag!r})"
         )
@@ -1022,7 +1051,10 @@ class ClassRenderer:
                     allow_none = True
                 if any("preferred" in str(arg).lower() for arg in args):
                     allow_none = True
-                if any(call.get("func") == "SetDefaultType" for call in param.get("chain", [])):
+                if any(
+                    call.get("func") == "SetDefaultType"
+                    for call in param.get("chain", [])
+                ):
                     allow_none = True
             if param.get("units"):
                 meta["units"] = param["units"]
@@ -1051,7 +1083,9 @@ class ClassRenderer:
                 meta["optional"] = True
 
             if enum_values:
-                enum_base_type = _map_primitive_type(param.get("ctype")) or base_python_type
+                enum_base_type = (
+                    _map_primitive_type(param.get("ctype")) or base_python_type
+                )
                 if enum_base_type not in {"int", "float", "bool", "str"}:
                     enum_base_type = "str"
                 enum_class_name = _pascal_case(attr_name) or "Enum"
@@ -1065,7 +1099,9 @@ class ClassRenderer:
                     python_type = enum_class_name
                 else:
                     python_type = f"{enum_class_name} | {base_python_type}"
-                matched = _match_enum_default(raw_default, coerced_default, enum_members)
+                matched = _match_enum_default(
+                    raw_default, coerced_default, enum_members
+                )
                 if matched is not None:
                     coerced_default = matched.value
                     default_expr = f"{enum_class_name}.{matched.name}"
@@ -1161,9 +1197,7 @@ def _build_module_header(
     common_parts.append("FEBioEntity")
     if uses_range_spec:
         common_parts.append("RangeSpec")
-    lines.append(
-        f"from {ROOT_PACKAGE}.common.base import {', '.join(common_parts)}"
-    )
+    lines.append(f"from {ROOT_PACKAGE}.common.base import {', '.join(common_parts)}")
     return "\n".join(lines) + "\n\n"
 
 
@@ -1173,7 +1207,7 @@ def _render_module(
     *,
     resolver: TypeResolver,
     category: str | None,
-) -> str:
+) -> ModuleRenderResult:
     """Compose the complete Python module.
 
     Args:
@@ -1184,8 +1218,14 @@ def _render_module(
         Full Python source representing the bindings module.
     """
 
-    categories = {category} if category else {item.category for item in manifest_items if item.category}
-    extra_imports, extra_exports, stub_exclude, skip_value_types, extra_prefix = _collect_category_injections(categories)
+    categories = (
+        {category}
+        if category
+        else {item.category for item in manifest_items if item.category}
+    )
+    extra_imports, extra_exports, stub_exclude, skip_value_types, extra_prefix = (
+        _collect_category_injections(categories)
+    )
 
     class_entries: list[dict[str, Any]] = []
     used_bases: set[str] = set()
@@ -1204,7 +1244,9 @@ def _render_module(
         if not has_payload:
             continue
         names_in_module.add(item.python_name)
-        class_entries.append({"name": item.python_name, "base": base_class, "source": rendered})
+        class_entries.append(
+            {"name": item.python_name, "base": base_class, "source": rendered}
+        )
         kept_items.append(item)
         if base_class:
             used_bases.add(base_class)
@@ -1217,7 +1259,9 @@ def _render_module(
     class_definitions = [entry["source"] for entry in ordered_entries]
     ordered_names = [entry["name"] for entry in ordered_entries]
     order_index = {name: idx for idx, name in enumerate(ordered_names)}
-    kept_items.sort(key=lambda item: order_index.get(item.python_name, len(order_index)))
+    kept_items.sort(
+        key=lambda item: order_index.get(item.python_name, len(order_index))
+    )
     class_blob = "\n\n".join(class_definitions)
 
     used_value_type_keys: list[str] = []
@@ -1230,7 +1274,9 @@ def _render_module(
             if python_name in class_blob:
                 used_value_type_keys.append(key)
 
-    value_type_block = "" if skip_value_types else _render_value_types(used_value_type_keys)
+    value_type_block = (
+        "" if skip_value_types else _render_value_types(used_value_type_keys)
+    )
     stub_block = _render_stub_classes(
         resolver.stub_names, ignore=stub_exclude, used_bases=used_bases
     )
@@ -1247,7 +1293,9 @@ def _render_module(
     for item in kept_items:
         _append_export(item.python_name)
     exports = ",\n    ".join(f"'{name}'" for name in export_names)
-    exports_block = f"__all__ = [\n    {exports},\n]\n\n" if export_names else "__all__ = []\n\n"
+    exports_block = (
+        f"__all__ = [\n    {exports},\n]\n\n" if export_names else "__all__ = []\n\n"
+    )
 
     body_parts: list[str] = []
     if import_block:
@@ -1261,11 +1309,13 @@ def _render_module(
             line = line.strip()
             if line.startswith(core_param_prefix):
                 after = line.split("import", 1)[1]
-                for token in after.split(','):
+                for token in after.split(","):
                     name = token.strip()
                     if name:
                         existing_helpers.add(name)
-    pending_helpers = sorted(helper for helper in core_helpers if helper not in existing_helpers)
+    pending_helpers = sorted(
+        helper for helper in core_helpers if helper not in existing_helpers
+    )
     if pending_helpers:
         body_parts.append(
             f"from {ROOT_PACKAGE}.Core.Parameters import {', '.join(pending_helpers)}\n"
@@ -1298,10 +1348,12 @@ def _render_module(
     )
 
     full_module = (header + module_body).replace("\n\n\n", "\n\n")
-    return full_module
+    return ModuleRenderResult(text=full_module, exports=export_names)
 
 
-def _collect_category_injections(categories: set[str]) -> tuple[str, list[str], set[str], bool, str]:
+def _collect_category_injections(
+    categories: set[str],
+) -> tuple[str, list[str], set[str], bool, str]:
     imports: list[str] = []
     exports: list[str] = []
     stub_exclude: set[str] = set()
@@ -1426,17 +1478,17 @@ def _render_value_types(value_types: Sequence[str]) -> str:
 def _order_class_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not entries:
         return []
-    name_to_entry = {entry['name']: entry for entry in entries}
+    name_to_entry = {entry["name"]: entry for entry in entries}
     graph: dict[str, list[str]] = {name: [] for name in name_to_entry}
     indegree: dict[str, int] = {name: 0 for name in name_to_entry}
 
     for entry in entries:
-        base = entry.get('base')
+        base = entry.get("base")
         if base in name_to_entry:
-            graph.setdefault(base, []).append(entry['name'])
-            indegree[entry['name']] = indegree.get(entry['name'], 0) + 1
-        graph.setdefault(entry['name'], [])
-        indegree.setdefault(entry['name'], indegree.get(entry['name'], 0))
+            graph.setdefault(base, []).append(entry["name"])
+            indegree[entry["name"]] = indegree.get(entry["name"], 0) + 1
+        graph.setdefault(entry["name"], [])
+        indegree.setdefault(entry["name"], indegree.get(entry["name"], 0))
 
     queue = deque([name for name, deg in indegree.items() if deg == 0])
     ordered: list[dict[str, Any]] = []
@@ -1453,7 +1505,7 @@ def _order_class_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 queue.append(child)
 
     for entry in entries:
-        if entry['name'] not in seen:
+        if entry["name"] not in seen:
             ordered.append(entry)
     return ordered
 
@@ -1484,6 +1536,13 @@ def _category_module_path(output_dir: Path, category: str) -> Path:
     safe = _sanitise_category(category)
     filename = f"Generated_{safe}_automatic.py"
     return output_dir / safe / filename
+
+
+def _per_class_module_path(output_dir: Path, category: str, python_name: str) -> Path:
+    safe_category = _sanitise_category(category)
+    safe_class = _sanitise_category(python_name)
+    filename = f"{safe_class}_automatic.py"
+    return output_dir / safe_category / filename
 
 
 def _write_package_init(
@@ -1528,6 +1587,8 @@ def generate(
     metadata_path: Path,
     output_path: Path | None,
     output_dir: Path | None,
+    per_class_output_dir: Path | None,
+    allow_missing: bool,
 ) -> None:
     """Generate the Python bindings module(s)."""
 
@@ -1537,32 +1598,88 @@ def generate(
 
     metadata_repo = MetadataRepository(_load_metadata_entries(metadata_path))
 
-    category_items = [item for items in manifest_map.values() for item in items]
-    resolver = TypeResolver(category_items)
+    all_manifest_items = [item for items in manifest_map.values() for item in items]
+    resolver = TypeResolver(all_manifest_items)
+
+    effective_manifest_map: dict[str, list[ManifestItem]] = {}
+    missing_manifest_items: list[ManifestItem] = []
+
+    for category, items in manifest_map.items():
+        present_items: list[ManifestItem] = []
+        for item in items:
+            if metadata_repo.has(item.class_name):
+                present_items.append(item)
+            else:
+                missing_manifest_items.append(item)
+        if present_items:
+            effective_manifest_map[category] = present_items
+
+    if not allow_missing and missing_manifest_items:
+        missing_classes = ", ".join(sorted({item.class_name for item in missing_manifest_items}))
+        raise KeyError(
+            "Metadata missing for manifest entries: "
+            f"{missing_classes}"
+        )
+
+    if allow_missing and missing_manifest_items:
+        skipped = ", ".join(sorted({item.class_name for item in missing_manifest_items}))
+        print(
+            f"[generator] Skipping manifest entries without metadata: {skipped}",
+            flush=True,
+        )
+
+    if not effective_manifest_map:
+        raise ValueError("No manifest entries have matching metadata to generate")
+
+    category_items = [item for items in effective_manifest_map.values() for item in items]
 
     formatted_targets: set[Path] = set()
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            _render_module(
-                category_items, metadata_repo, resolver=resolver, category=None
-            )
+        module_result = _render_module(
+            category_items, metadata_repo, resolver=resolver, category=None
         )
+        output_path.write_text(module_result.text)
         formatted_targets.add(output_path)
 
     if output_dir:
-        for category, items in manifest_map.items():
-            module_text = _render_module(
+        for category, items in effective_manifest_map.items():
+            module_result = _render_module(
                 items, metadata_repo, resolver=resolver, category=category
             )
             module_path = _category_module_path(output_dir, category)
             module_path.parent.mkdir(parents=True, exist_ok=True)
-            module_path.write_text(module_text)
+            module_path.write_text(module_result.text)
             formatted_targets.add(module_path)
 
-    if not output_path and not output_dir:
-        raise ValueError("At least one of --output or --output-dir must be provided")
+    if per_class_output_dir:
+        for category, items in effective_manifest_map.items():
+            category_dir = per_class_output_dir / _sanitise_category(category)
+            category_dir.mkdir(parents=True, exist_ok=True)
+            init_path = category_dir / "__init__.py"
+            if not init_path.exists():
+                init_path.write_text(
+                    "# Auto-generated by classExposer.generator\n__all__ = []\n"
+                )
+                formatted_targets.add(init_path)
+            for item in items:
+                module_result = _render_module(
+                    [item], metadata_repo, resolver=resolver, category=category
+                )
+                if not module_result.exports:
+                    continue
+                module_path = _per_class_module_path(
+                    per_class_output_dir, category, item.python_name
+                )
+                module_path.parent.mkdir(parents=True, exist_ok=True)
+                module_path.write_text(module_result.text)
+                formatted_targets.add(module_path)
+
+    if not output_path and not output_dir and not per_class_output_dir:
+        raise ValueError(
+            "At least one of --output, --output-dir, or --per-class-output-dir must be provided"
+        )
 
     _run_ruff(sorted(formatted_targets))
 
@@ -1592,6 +1709,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         help="Directory where category-specific packages will be generated",
     )
+    parser.add_argument(
+        "--per-class-output-dir",
+        help="Directory where individual per-class modules will be generated",
+    )
+    parser.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="Skip manifest entries that do not have metadata instead of failing",
+    )
     return parser
 
 
@@ -1614,6 +1740,7 @@ def _run_ruff(paths: Sequence[Path]) -> None:
     except FileNotFoundError:
         print("[generator] Ruff not found, skipping linting", flush=True)
 
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point.
 
@@ -1626,13 +1753,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
-    if not args.output and not args.output_dir:
-        parser.error("At least one of --output or --output-dir must be provided")
+    if not args.output and not args.output_dir and not args.per_class_output_dir:
+        parser.error(
+            "At least one of --output, --output-dir, or --per-class-output-dir must be provided"
+        )
     generate(
         Path(args.manifest),
         Path(args.metadata),
         Path(args.output) if args.output else None,
         Path(args.output_dir) if args.output_dir else None,
+        Path(args.per_class_output_dir) if args.per_class_output_dir else None,
+        args.allow_missing,
     )
     return 0
 
