@@ -224,6 +224,7 @@ class Mesh:
             if nodesets is None
             else {k: np.asarray(v, dtype=np.int64) for k, v in nodesets.items()}
         )
+        self._feb_node_cache: dict[str, object] | None = None
 
     # -------------- simple queries --------------
 
@@ -290,8 +291,8 @@ class Mesh:
 
     # -------------- FEBio XML writers --------------
 
-    def to_feb_nodes_xml(self, object_name: str = "Object1") -> ET.Element:
-        """Build a FEBio ``<Nodes>`` element.
+    def to_feb_nodes_xml(self, object_name: str = "Object1") -> list[ET.Element]:
+        """Build FEBio ``<Nodes>`` elements grouped by part with cumulative ids.
 
         Args
         ----
@@ -300,15 +301,25 @@ class Mesh:
 
         Returns
         -------
-        Element
-            Root ``<Nodes>`` element.
+        list
+            list of ``<Nodes>`` elements.
         """
-        root = ET.Element("Nodes", name=object_name)
-        for i, xyz in enumerate(self.nodes.xyz, start=1):
-            node_el = ET.Element("node", id=str(i))
-            node_el.text = ",".join(map(str, xyz))
-            root.append(node_el)
-        return root
+        cache = self._build_feb_node_cache(object_name)
+        nodes_xml: list[ET.Element] = []
+        part_nodes: list[tuple[str, np.ndarray]] = cache["part_nodes"]
+        part_map: dict[str, dict[int, int]] = cache["part_map"]
+
+        for name, node_ids in part_nodes:
+            root = ET.Element("Nodes", name=name)
+            mapping = part_map[name]
+            for nid in node_ids:
+                nid_int = int(nid)
+                new_id = mapping[nid_int]
+                node_el = ET.Element("node", id=str(new_id))
+                node_el.text = ",".join(map(str, self.nodes.xyz[nid_int]))
+                root.append(node_el)
+            nodes_xml.append(root)
+        return nodes_xml
 
     def to_feb_elements_xml(self) -> list[ET.Element]:
         """Build one FEBio ``<Elements>`` element per part.
@@ -318,14 +329,22 @@ class Mesh:
         list
             list of ``<Elements>`` elements.
         """
+        cache = self._ensure_feb_node_cache()
+        part_map: dict[str, dict[int, int]] = cache["part_map"]
+
         out: list[ET.Element] = []
         for pname, eidx in self.parts.items():
             part = self.elements[eidx]
             # Decide type label: if mixed, use first
             etype = str(np.unique(part.etype)[0]) if len(part) else "unknown"
             el = ET.Element("Elements", type=etype, name=pname)
+            node_id_map = part_map.get(pname)
+            if node_id_map is None:
+                raise KeyError(f"No node id map available for part '{pname}'")
             for local_idx, global_idx in enumerate(eidx):
-                nodes = (part.nodes_of(local_idx) + 1).tolist()
+                nodes = [
+                    node_id_map[int(nid)] for nid in part.nodes_of(local_idx).tolist()
+                ]
                 e_el = ET.Element("elem", id=str(int(global_idx) + 1))
                 e_el.text = ",".join(map(str, nodes))
                 el.append(e_el)
@@ -340,6 +359,11 @@ class Mesh:
         list
             list of ``<Surface>`` elements.
         """
+        cache = self._ensure_feb_node_cache()
+        part_map: dict[str, dict[int, int]] = cache["part_map"]
+        part_node_sets: dict[str, set[int]] = cache["part_node_sets"]
+        global_map: dict[int, int] = cache["global_map"]
+
         out: list[ET.Element] = []
         for sname, surf in self.surfaces.items():
             el = ET.Element("Surface", name=sname)
@@ -347,7 +371,21 @@ class Mesh:
                 nn = surf.nper[i]
                 etype = {2: "line2", 3: "tri3", 4: "quad4"}.get(int(nn), "facet")
                 f_el = ET.Element(etype, id=str(i + 1))
-                f_el.text = ",".join(map(str, (surf.nodes_of(i) + 1).tolist()))
+                node_list = [int(nid) for nid in surf.nodes_of(i).tolist()]
+                mapped = None
+                for pname, node_set in part_node_sets.items():
+                    if all(n in node_set for n in node_list):
+                        mapping = part_map[pname]
+                        mapped = [mapping[n] for n in node_list]
+                        break
+                if mapped is None:
+                    try:
+                        mapped = [global_map[n] for n in node_list]
+                    except KeyError as exc:
+                        raise KeyError(
+                            f"Surface '{sname}' references unknown node id {int(node_list[0])}"
+                        ) from exc
+                f_el.text = ",".join(map(str, mapped))
                 el.append(f_el)
             out.append(el)
         return out
@@ -360,12 +398,87 @@ class Mesh:
         list
             list of ``<NodeSet>`` elements.
         """
+        cache = self._ensure_feb_node_cache()
+        part_map: dict[str, dict[int, int]] = cache["part_map"]
+        part_node_sets: dict[str, set[int]] = cache["part_node_sets"]
+        global_map: dict[int, int] = cache["global_map"]
+
         out: list[ET.Element] = []
         for nname, nids in self.nodesets.items():
             el = ET.Element("NodeSet", name=nname)
-            el.text = ",".join(map(str, (nids + 1).tolist()))
+            node_list = [int(nid) for nid in nids.tolist()]
+            mapped = None
+            for pname, node_set in part_node_sets.items():
+                if all(n in node_set for n in node_list):
+                    mapping = part_map[pname]
+                    mapped = [mapping[n] for n in node_list]
+                    break
+            if mapped is None:
+                try:
+                    mapped = [global_map[n] for n in node_list]
+                except KeyError as exc:
+                    raise KeyError(
+                        f"NodeSet '{nname}' references unknown node id {int(node_list[0])}"
+                    ) from exc
+            el.text = ",".join(map(str, mapped))
             out.append(el)
         return out
+
+    def _build_feb_node_cache(self, object_name: str) -> dict[str, object]:
+        """Compute and cache FEBio node numbering data."""
+        part_nodes: list[tuple[str, np.ndarray]] = []
+        part_map: dict[str, dict[int, int]] = {}
+        part_node_sets: dict[str, set[int]] = {}
+        global_map: dict[int, int] = {}
+
+        counter = 1
+        if self.parts:
+            items = list(self.parts.items())
+            for pname, eidx in items:
+                part = self.elements[eidx]
+                node_ids = np.asarray(part.unique_nodes(), dtype=np.int64)
+                node_ids.sort()
+                local_map: dict[int, int] = {}
+                node_set: set[int] = set()
+                for nid in node_ids.tolist():
+                    nid_int = int(nid)
+                    new_id = counter
+                    counter += 1
+                    local_map[nid_int] = new_id
+                    global_map[nid_int] = new_id
+                    node_set.add(nid_int)
+                part_nodes.append((pname, node_ids))
+                part_map[pname] = local_map
+                part_node_sets[pname] = node_set
+        else:
+            node_ids = np.arange(self.nnodes, dtype=np.int64)
+            local_map = {int(nid): counter + idx for idx, nid in enumerate(node_ids)}
+            counter += len(node_ids)
+            part_nodes.append((object_name, node_ids))
+            part_map[object_name] = local_map
+            part_node_sets[object_name] = set(local_map.keys())
+            global_map.update(local_map)
+
+        cache = {
+            "object_name": object_name,
+            "part_nodes": part_nodes,
+            "part_map": part_map,
+            "part_node_sets": part_node_sets,
+            "global_map": global_map,
+            "max_node_id": counter - 1,
+        }
+        self._feb_node_cache = cache
+        return cache
+
+    def _ensure_feb_node_cache(self, object_name: str | None = None) -> dict[str, object]:
+        """Return cached FEBio node numbering, building it as required."""
+        cache = getattr(self, "_feb_node_cache", None)
+        if cache is None:
+            name = object_name or "Object1"
+            return self._build_feb_node_cache(name)
+        if object_name is not None and cache["object_name"] != object_name:
+            return self._build_feb_node_cache(object_name)
+        return cache
 
     # -------------- constructors from sources --------------
 

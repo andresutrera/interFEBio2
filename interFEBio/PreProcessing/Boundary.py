@@ -62,6 +62,8 @@ class prescribedDisplacement:
             attributes = {}
         self.name = name
         self.lc = lc
+        attributes["value"] = {"lc": self.lc}
+
         if isinstance(nset, list):
             # pass #Add nodeset to mesh definition
             self.nset = _var("node_set", nset)

@@ -15,8 +15,10 @@ class material:
         type: str,
         elementSet: str,
         parameters: dict,
-        attributes: dict,
+        attributes: dict | None = None,
     ):
+        if attributes is None:
+            attributes = {}
         self.id = id
         self.type = type
         self.name = name

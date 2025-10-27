@@ -10,7 +10,8 @@ import xml.etree.cElementTree as ET
 from typing import TYPE_CHECKING
 
 from ..Mesh.Mesh import Mesh
-from . import Control, Globals, LoadData, Output, Step
+from . import Control, Globals, LoadData, Output
+from .Step import Step as StepClass
 
 if TYPE_CHECKING:
     from .Control import Control as ControlBlock
@@ -77,7 +78,8 @@ class Model:
     def addMesh(self, msh: Mesh) -> None:
         self.mshObject = msh
 
-        self.mesh.append(msh.to_feb_nodes_xml())  # Nodes
+        for nodes_el in msh.to_feb_nodes_xml():  # Nodes per object
+            self.mesh.append(nodes_el)
 
         for elset in msh.to_feb_elements_xml():  # Element domains
             self.mesh.append(elset)
@@ -110,7 +112,7 @@ class Model:
                     self.meshData.append(meshData)
 
     def addStep(self, stp: StepSection | None = None) -> None:
-        step_obj = stp if stp is not None else Step.Step()
+        step_obj = stp if stp is not None else StepClass()
         self.Steps.append(step_obj.tree())
 
     def addMaterial(
@@ -120,11 +122,24 @@ class Model:
     ) -> None:
         if material is None:
             raise ValueError("material must be provided")
-        self.material.append(material.tree())
+        mat_tree = material.tree()
+        if mat_tree.tag == "Material":
+            for child in list(mat_tree):
+                self.material.append(child)
+        else:
+            self.material.append(mat_tree)
         if parameters is None:
             self.addMeshDomain(material)
         else:
             self.addMeshDomain(material, parameters=parameters)
+
+    def addSurfacePair(self, name: str, primary: str, secondary: str) -> None:
+        if self.mesh is None:
+            raise RuntimeError("Mesh element is not initialized")
+        pair = ET.Element("SurfacePair", name=name)
+        ET.SubElement(pair, "primary").text = primary
+        ET.SubElement(pair, "secondary").text = secondary
+        self.mesh.append(pair)
 
     # def addMeshDomain(self, material:Material = None):
     #     type = self.mshObject.elsets[material.elementSet]['type']

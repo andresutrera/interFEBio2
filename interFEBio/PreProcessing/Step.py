@@ -56,23 +56,23 @@ class Step:
             ctrl = _Control()
         self.atr.addAttrib(ctrl)
 
-    def addBoundary(self, bound: BoundaryItem | None = None) -> None:
+    def addBoundary(self, bound: BoundaryItem) -> None:
         if bound is not None:
             self.bndatr.append(bound)
 
-    def addLoad(self, load: LoadItem | None = None) -> None:
+    def addLoad(self, load: LoadItem) -> None:
         if load is not None:
             self.loadsatr.append(load)
 
-    def addRigid(self, rigid: RigidItem | None = None) -> None:
+    def addRigid(self, rigid: RigidItem) -> None:
         if rigid is not None:
             self.rigidatr.append(rigid)
 
-    def addContact(self, cntc: ContactItem | None = None) -> None:
+    def addContact(self, cntc: ContactItem) -> None:
         if cntc is not None:
             self.contacatr.append(cntc)
 
-    def addConstraint(self, cnstrnt: ConstraintItem | None = None) -> None:
+    def addConstraint(self, cnstrnt: ConstraintItem) -> None:
         if cnstrnt is not None:
             self.constraintatr.append(cnstrnt)
 
