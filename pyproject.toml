@@ -39,6 +39,14 @@ dev = [
   "ruff>=0.3",
   "numpy"
 ]
+monitor = [
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0",
+  "watchdog>=4.0.0"
+]
+
+[project.scripts]
+interfebio-monitor = "interFEBio.monitoring.webapp:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [

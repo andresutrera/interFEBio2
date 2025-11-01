@@ -1,21 +1,22 @@
+"""Mesh container for interFEBio.
+
+This module defines small data classes to store nodes, elements, and surfaces.
+It also provides helpers to export FEBio XML blocks and to build a mesh from
+Gmsh ``.msh`` files or from an already parsed ``xplt`` reader.
+
+"""
+
 from __future__ import annotations
 
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING,
-    Sequence,
-)
+from typing import TYPE_CHECKING, Sequence, TypedDict
 
 import numpy as np
 
 if TYPE_CHECKING:
     from interFEBio.XPLT import xplt
-
-# ----------------------------------------------------------------------
-# Low-level tables with slice-first APIs
-# ----------------------------------------------------------------------
 
 
 @dataclass
@@ -41,34 +42,44 @@ class NodeArray:
         self.xyz = a
 
     def __len__(self) -> int:
-        """Number of nodes."""
+        """Return the number of nodes."""
         return int(self.xyz.shape[0])
 
     def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> NodeArray:
-        """Return a sliced view."""
+        """Return a sliced view.
+
+        The returned object is a new ``NodeArray`` pointing to a view of
+        the original array when possible.
+        """
         return NodeArray(self.xyz[idx])
 
     def take(self, ids: np.ndarray | list[int]) -> NodeArray:
-        """Return a new node table with selected node ids."""
+        """Return a new node table with the given node ids.
+
+        Parameters
+        ----------
+        ids
+            0-based node ids to select.
+        """
         return NodeArray(self.xyz[np.asarray(ids, dtype=np.int64)])
 
 
 @dataclass
 class ElementArray:
-    """Mixed-element connectivity with padding for slice simplicity.
+    """Mixed-element connectivity with padding.
 
-    Elements are stored in a 2D integer array with padding using ``-1``.
-    The actual number of nodes per element is given by ``nper``. This
-    keeps slicing trivial while still supporting variable arity.
+    Elements live in a 2D integer array with ``-1`` padding on the right.
+    The valid size of each row is stored in ``nper``. This keeps slicing
+    and vectorized operations simple while still allowing mixed arity.
 
     Attributes
     ----------
     conn
-        Array of shape (E, Kmax) with 0-based node ids. Unused slots are ``-1``.
+        Array of shape ``(E, Kmax)`` with 0-based node ids. Unused slots are ``-1``.
     nper
-        Array of shape (E,) with the valid count per row.
+        Array of shape ``(E,)`` with the valid count per row.
     etype
-        Array of shape (E,) with canonical labels such as ``'hex8'``, ``'tet4'``.
+        Array of shape ``(E,)`` with labels like ``'hex8'`` or ``'tet4'``.
     """
 
     conn: np.ndarray
@@ -89,7 +100,7 @@ class ElementArray:
             raise ValueError("conn, nper, etype length mismatch")
 
     def __len__(self) -> int:
-        """Number of elements."""
+        """Return the number of elements."""
         return int(self.conn.shape[0])
 
     def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> ElementArray:
@@ -97,23 +108,42 @@ class ElementArray:
         return ElementArray(self.conn[idx], self.nper[idx], self.etype[idx])
 
     def nodes_of(self, ei: int) -> np.ndarray:
-        """Return 1D array of node ids for a single element."""
+        """Return node ids for a single element.
+
+        Parameters
+        ----------
+        ei
+            Element row index.
+
+        Returns
+        -------
+        Array of length ``nper[ei]`` with node ids.
+        """
         k = self.nper[ei]
         return self.conn[ei, :k]
 
     def unique_nodes(self) -> np.ndarray:
-        """Return sorted unique node ids across the selection."""
+        """Return sorted unique node ids used by the selection.
+
+        Empty selections return an empty array with ``int64`` dtype.
+        """
         if len(self) == 0:
             return np.empty((0,), dtype=np.int64)
         valid = self._mask_valid()
         return np.unique(self.conn[valid])
 
     def as_ragged(self) -> list[np.ndarray]:
-        """Return Python list of 1D arrays per element."""
+        """Return a Python list with one 1D array of node ids per element.
+
+        Useful when downstream code expects per-element lists.
+        """
         return [self.nodes_of(i) for i in range(len(self))]
 
     def _mask_valid(self) -> np.ndarray:
-        """Boolean mask same shape as conn with True on valid entries."""
+        """Return a boolean mask of the same shape as ``conn``.
+
+        True marks a valid node slot. False marks a padded slot.
+        """
         counts = np.repeat(self.nper[:, None], self.conn.shape[1], axis=1)
         idx = np.repeat(np.arange(self.conn.shape[1])[None, :], len(self), axis=0)
         return idx < counts
@@ -121,14 +151,16 @@ class ElementArray:
 
 @dataclass
 class SurfaceArray:
-    """Facet connectivity with padding for slice simplicity.
+    """Facet connectivity with padding.
+
+    Facets are stored like elements: a padded 2D array plus an ``nper`` vector.
 
     Attributes
     ----------
     faces
-        Array of shape (F, Kmax) with 0-based node ids. Unused slots are ``-1``.
+        Array of shape ``(F, Kmax)`` with 0-based node ids. Unused slots are ``-1``.
     nper
-        Array of shape (F,) with valid count per facet.
+        Array of shape ``(F,)`` with valid count per facet.
     """
 
     faces: np.ndarray
@@ -144,7 +176,7 @@ class SurfaceArray:
             raise ValueError("faces and nper length mismatch")
 
     def __len__(self) -> int:
-        """Number of facets."""
+        """Return the number of facets."""
         return int(self.faces.shape[0])
 
     def __getitem__(self, idx: slice | int | np.ndarray | list[int]) -> SurfaceArray:
@@ -152,33 +184,69 @@ class SurfaceArray:
         return SurfaceArray(self.faces[idx], self.nper[idx])
 
     def nodes_of(self, fi: int) -> np.ndarray:
-        """Return node ids for a single facet."""
+        """Return node ids for a single facet.
+
+        Parameters
+        ----------
+        fi
+            Facet row index.
+
+        Returns
+        -------
+        Array of length ``nper[fi]`` with node ids.
+        """
         k = self.nper[fi]
         return self.faces[fi, :k]
 
     def unique_nodes(self) -> np.ndarray:
-        """Return sorted unique node ids across the selection."""
+        """Return sorted unique node ids used by the selection.
+
+        Empty selections return an empty array with ``int64`` dtype.
+        """
         if len(self) == 0:
             return np.empty((0,), dtype=np.int64)
         valid = self._mask_valid()
         return np.unique(self.faces[valid])
 
     def _mask_valid(self) -> np.ndarray:
+        """Return a boolean mask of the same shape as ``faces``."""
         counts = np.repeat(self.nper[:, None], self.faces.shape[1], axis=1)
         idx = np.repeat(np.arange(self.faces.shape[1])[None, :], len(self), axis=0)
         return idx < counts
 
 
-# ----------------------------------------------------------------------
-# Mesh container with isolated subsystems and name-first access
-# ----------------------------------------------------------------------
+class FebNodeCache(TypedDict):
+    """Cached node numbering for FEBio XML writers.
+
+    Keys
+    ----
+    object_name
+        Name used when no parts exist.
+    part_nodes
+        List of tuples ``(part_name, node_ids_sorted)``.
+    part_map
+        Mapping ``part_name -> {old_node_id: new_node_id}``.
+    part_node_sets
+        Mapping ``part_name -> set(old_node_id)`` for quick membership checks.
+    global_map
+        Mapping ``old_node_id -> new_node_id`` across all parts.
+    max_node_id
+        Highest assigned node id in the cache.
+    """
+
+    object_name: str
+    part_nodes: list[tuple[str, np.ndarray]]
+    part_map: dict[str, dict[int, int]]
+    part_node_sets: dict[str, set[int]]
+    global_map: dict[int, int]
+    max_node_id: int
 
 
 class Mesh:
-    """Unified mesh container with isolated node, element, and surface tables.
+    """Unified mesh container.
 
-    Keeps each concern in its own class for maintainability. Still allows
-    NumPy slicing on nodes and elements while avoiding CSR complexity.
+    Holds node, element, surface, and set tables. Keeps each concern in its own
+    class. Provides name-first access and FEBio XML builders.
 
     Attributes
     ----------
@@ -210,7 +278,21 @@ class Mesh:
         surfaces: dict[str, SurfaceArray] | None = None,
         nodesets: dict[str, np.ndarray] | None = None,
     ) -> None:
-        """Initialize the mesh."""
+        """Initialize the mesh.
+
+        Parameters
+        ----------
+        nodes
+            Node table.
+        elements
+            Element table.
+        parts
+            Optional mapping ``name -> element indices``.
+        surfaces
+            Optional mapping ``name -> SurfaceArray``.
+        nodesets
+            Optional mapping ``name -> node ids``.
+        """
         self.nodes = nodes
         self.elements = elements
         self.parts = (
@@ -224,22 +306,27 @@ class Mesh:
             if nodesets is None
             else {k: np.asarray(v, dtype=np.int64) for k, v in nodesets.items()}
         )
-        self._feb_node_cache: dict[str, object] | None = None
+        self._feb_node_cache: FebNodeCache | None = None
 
     # -------------- simple queries --------------
 
     @property
     def nelems(self) -> int:
-        """Number of elements in the mesh."""
+        """Return the number of elements in the mesh."""
         return len(self.elements)
 
     @property
     def nnodes(self) -> int:
-        """Number of nodes in the mesh."""
+        """Return the number of nodes in the mesh."""
         return len(self.nodes)
 
     def bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """Axis-aligned bounding box."""
+        """Return the axis-aligned bounding box.
+
+        Returns
+        -------
+        A tuple ``(min_xyz, max_xyz)`` with two arrays of shape ``(3,)``.
+        """
         return self.nodes.xyz.min(0), self.nodes.xyz.max(0)
 
     # -------------- name-first views --------------
@@ -247,62 +334,81 @@ class Mesh:
     def getDomain(self, name: str) -> ElementArray:
         """Return a slice of ``elements`` for a named part.
 
-        Args
-        ----
+        Parameters
+        ----------
         name
             Part name.
 
         Returns
         -------
-        ElementArray
-            Slice view for the requested domain.
+        Slice view of ``elements`` for the requested domain.
+
+        Raises
+        ------
+        KeyError
+            If the part name does not exist.
         """
         return self.elements[self.parts[name]]
 
     def getSurface(self, name: str) -> SurfaceArray:
         """Return a surface by name.
 
-        Args
-        ----
+        Parameters
+        ----------
         name
             Surface name.
 
         Returns
         -------
-        SurfaceArray
-            Facet table.
+        Surface table.
+
+        Raises
+        ------
+        KeyError
+            If the surface name does not exist.
         """
         return self.surfaces[name]
 
     def getNodeset(self, name: str) -> NodeArray:
         """Return a nodeset by name as a node slice.
 
-        Args
-        ----
+        Parameters
+        ----------
         name
             Nodeset name.
 
         Returns
         -------
-        NodeArray
-            Node slice view.
+        Node slice view.
+
+        Raises
+        ------
+        KeyError
+            If the nodeset name does not exist.
         """
         return self.nodes.take(self.nodesets[name])
 
     # -------------- FEBio XML writers --------------
 
     def to_feb_nodes_xml(self, object_name: str = "Object1") -> list[ET.Element]:
-        """Build FEBio ``<Nodes>`` elements grouped by part with cumulative ids.
+        """Build FEBio ``<Nodes>`` elements grouped by part.
 
-        Args
-        ----
+        Node ids are re-numbered per part in ascending order of original ids.
+        If no parts exist, a single group named ``object_name`` is created.
+
+        Parameters
+        ----------
         object_name
-            FEBio object name.
+            Name used when no parts are present.
 
         Returns
         -------
-        list
-            list of ``<Nodes>`` elements.
+        List of ``<Nodes>`` elements. Order follows the internal part order.
+
+        Notes
+        -----
+        Node ids in XML are 1-based. Coordinates are written as comma-separated
+        values ``x,y,z``.
         """
         cache = self._build_feb_node_cache(object_name)
         nodes_xml: list[ET.Element] = []
@@ -326,8 +432,13 @@ class Mesh:
 
         Returns
         -------
-        list
-            list of ``<Elements>`` elements.
+        List of ``<Elements>`` elements.
+
+        Notes
+        -----
+        Element ids in XML are 1-based and follow the original element order.
+        Element type is taken as the first unique ``etype`` in the part.
+        Mixed types in one part are not expanded.
         """
         cache = self._ensure_feb_node_cache()
         part_map: dict[str, dict[int, int]] = cache["part_map"]
@@ -356,8 +467,12 @@ class Mesh:
 
         Returns
         -------
-        list
-            list of ``<Surface>`` elements.
+        List of ``<Surface>`` elements.
+
+        Notes
+        -----
+        Facet tags are chosen by node count: ``line2``, ``tri3``, or ``quad4``.
+        Fallback tag is ``facet`` when the count is unknown.
         """
         cache = self._ensure_feb_node_cache()
         part_map: dict[str, dict[int, int]] = cache["part_map"]
@@ -395,8 +510,11 @@ class Mesh:
 
         Returns
         -------
-        list
-            list of ``<NodeSet>`` elements.
+        List of ``<NodeSet>`` elements.
+
+        Notes
+        -----
+        Node ids are re-numbered using the same rules as for nodes and surfaces.
         """
         cache = self._ensure_feb_node_cache()
         part_map: dict[str, dict[int, int]] = cache["part_map"]
@@ -424,8 +542,26 @@ class Mesh:
             out.append(el)
         return out
 
-    def _build_feb_node_cache(self, object_name: str) -> dict[str, object]:
-        """Compute and cache FEBio node numbering data."""
+    def _build_feb_node_cache(self, object_name: str) -> FebNodeCache:
+        """Compute and store FEBio node numbering.
+
+        Rules
+        -----
+        - If parts exist, nodes are grouped by part. Each group gets 1-based,
+          contiguous ids in ascending order of original ids.
+        - If no parts exist, all nodes are grouped under ``object_name``.
+        - ``global_map`` mirrors the per-part numbering so surfaces and sets
+          can map node ids even if they span parts.
+
+        Parameters
+        ----------
+        object_name
+            Name used when no parts are present.
+
+        Returns
+        -------
+        Cache dictionary used by XML writers.
+        """
         part_nodes: list[tuple[str, np.ndarray]] = []
         part_map: dict[str, dict[int, int]] = {}
         part_node_sets: dict[str, set[int]] = {}
@@ -459,7 +595,7 @@ class Mesh:
             part_node_sets[object_name] = set(local_map.keys())
             global_map.update(local_map)
 
-        cache = {
+        cache: FebNodeCache = {
             "object_name": object_name,
             "part_nodes": part_nodes,
             "part_map": part_map,
@@ -470,9 +606,19 @@ class Mesh:
         self._feb_node_cache = cache
         return cache
 
-    def _ensure_feb_node_cache(self, object_name: str | None = None) -> dict[str, object]:
-        """Return cached FEBio node numbering, building it as required."""
-        cache = getattr(self, "_feb_node_cache", None)
+    def _ensure_feb_node_cache(self, object_name: str | None = None) -> FebNodeCache:
+        """Return cached FEBio node numbering, building it if needed.
+
+        Parameters
+        ----------
+        object_name
+            When given and different from the cache, the cache is rebuilt.
+
+        Returns
+        -------
+        Cache dictionary used by XML writers.
+        """
+        cache = self._feb_node_cache
         if cache is None:
             name = object_name or "Object1"
             return self._build_feb_node_cache(name)
@@ -490,23 +636,41 @@ class Mesh:
         scale: Sequence[float] | np.ndarray = (1.0, 1.0, 1.0),
         quiet: bool = False,
     ) -> Mesh:
-        """Create from a Gmsh 2.0/2.2 ASCII ``.msh`` file.
+        """Create a mesh from a Gmsh 2.0/2.2 ASCII ``.msh`` file.
 
-        Args
-        ----
+        The reader:
+        - Supports physical groups for volumes, surfaces, and lines.
+        - Builds parts from volume groups. Optionally filters by ``include``.
+        - Builds surfaces and nodesets from surface/line groups.
+        - Reindexes node ids to 0-based and preserves original ordering.
+        - Pads connectivity to a common width for simple slicing.
+
+        Parameters
+        ----------
         path
-            Path to file.
+            Path to the ``.msh`` file.
         include
-            Physical names to include as parts. If None, include all volumes.
+            Physical names to include as parts. When ``None``, include all volumes.
         scale
-            Per-axis scale for node coordinates.
+            Per-axis scale for node coordinates. Applied as ``(sx, sy, sz)``.
         quiet
-            Suppress warnings.
+            When ``True``, suppress warnings about unsupported types.
 
         Returns
         -------
-        Mesh
-            New instance.
+        New ``Mesh`` instance.
+
+        Raises
+        ------
+        SystemExit
+            When the file uses an unsupported Gmsh format.
+        ValueError
+            When the file has inconsistent sections.
+
+        Notes
+        -----
+        Only Gmsh ASCII formats 2.0 and 2.2 are supported. Quadratic types are
+        kept as-is but not expanded. Unknown element types are skipped.
         """
         with open(path, "r", encoding="utf-8") as f:
             lines = [ln.strip() for ln in f]
@@ -630,19 +794,21 @@ class Mesh:
 
     @classmethod
     def from_xplt(cls, xplt_reader: xplt) -> Mesh:
-        """Create from an ``xplt`` reader that already parsed the mesh.
+        """Create a mesh from an ``xplt`` reader that already parsed a mesh.
 
-        Args
-        ----
+        Parameters
+        ----------
         xplt_reader
-            Reader whose ``mesh`` attribute is an instance of :class:`Mesh`.
-            This method clones that mesh into a detached copy so later edits
-            do not mutate the reader's internal buffers.
+            Reader whose ``mesh`` attribute is an instance compatible with ``Mesh``.
 
         Returns
         -------
-        Mesh
-            New instance.
+        Detached copy of the reader mesh.
+
+        Raises
+        ------
+        TypeError
+            When ``xplt_reader.mesh`` is not compatible with this class.
         """
         xm = xplt_reader.mesh
 

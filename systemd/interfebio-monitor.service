@@ -1,0 +1,16 @@
+[Unit]
+Description=interFEBio Monitoring Service
+After=network.target
+
+[Service]
+Type=simple
+User=interfebio
+Group=interfebio
+EnvironmentFile=/etc/interfebio-monitor.conf
+ExecStart=/usr/bin/env interfebio-monitor --storage-root ${STORAGE_ROOT} --port ${PORT} --host ${HOST} --event-socket ${SOCKET_PATH}
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

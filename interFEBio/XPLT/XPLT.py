@@ -1,4 +1,145 @@
-# XPLT.py — FEBio .xplt reader with regional FMT_NODE support and fully typed views.
+"""FEBio .xplt reader with regional FMT_NODE support and sliceable result views.
+
+Overview
+========
+This module reads FEBio ``.xplt`` files and exposes results through *views*.
+A view is a small object that lets you slice results by time, by region, by
+item (element or face), by node inside an item, and by component. Views do
+not copy data unless needed. They return NumPy arrays on demand.
+
+Workflow
+--------
+1) Header and dictionary
+   - The reader opens the file and checks magic, version, and compression.
+   - The dictionary is parsed. Each variable gets a data type and a storage
+     format (FMT_NODE, FMT_ITEM, FMT_MULT, FMT_REGION). The dictionary also
+     sets where the variable lives (node, elem, face).
+
+2) Mesh
+   - Nodes, domains (parts), surfaces, and nodesets are parsed.
+   - Connectivity is padded to a fixed width so slicing stays simple.
+   - A :class:`Mesh` object is built with separate node, element, and surface
+     tables. Domain and surface names are preserved.
+
+3) States
+   - You can read every state with ``readAllStates()`` or a list of steps
+     with ``readSteps([ ... ])``.
+   - Each state holds time and a block of result streams:
+     node, element, and face.
+   - For each stream the reader detects the format and region id then stores
+     per-state data in scratch buffers. Missing data is recorded as ``None``.
+
+4) Finalization
+   - After reading, per-variable buffers are converted into *views* and
+     attached to a :class:`Results` container under ``xplt.results``.
+   - No interpolation is done. Shapes are left as written.
+
+Views concept
+=============
+A *view* lets you request a rectangular block from a result without knowing
+how it is stored inside the reader. The API is the same across formats:
+
+- ``time(idx)`` picks states by index or slice.
+- ``comp(idx)`` picks components by index, slice, or name (when available).
+- Region-aware views support:
+  - ``region(name)`` or ``domain(name)`` for parts,
+  - ``surface(name)`` for faces,
+  - ``regions()`` to list names.
+- Indexers for items and nodes:
+  - ``items(ids)`` or aliases ``elems(ids)`` and ``faces(ids)``.
+  - ``enodes(ids)`` for per-element-node data.
+  - ``nodes(ids)`` for nodal data.
+- Shorthand slicing with ``__getitem__`` is available on some views.
+
+Selectors accept:
+- integers,
+- Python slices,
+- lists or NumPy index arrays,
+- the string token ``":"`` as a shorthand for "all".
+
+Returned array shapes follow the view's ``dims()`` description.
+
+View types
+----------
+- :class:`NodeResultView` (FMT_NODE global):
+  dims = (time, node, component).
+
+- :class:`NodeRegionResultView` (FMT_NODE per-domain):
+  dims = (time, node_in_region, component).
+  First choose a region with ``region(name)`` or index via ``[t, node_sel, comp]``
+  after selecting a single region.
+
+- :class:`ItemResultView` (FMT_ITEM for domains or surfaces):
+  dims = (time, item, component). Items are elements for domains and faces for
+  surfaces.
+
+- :class:`MultResultView` (FMT_MULT per item per element-node):
+  dims = (time, item, enode, component). Padding with NaN is used when an item
+  has fewer nodes than the maximum in the region.
+
+- :class:`RegionResultView` (FMT_REGION one vector per region):
+  dims = (time, component). Use ``region(name)`` to select a single region.
+
+Component names
+---------------
+When a variable defines named components the following tokens can be used:
+
+- VEC3F: ``"x" "y" "z"``
+- MAT3FD: ``"xx" "yy" "zz"``
+- MAT3FS: ``"xx" "yy" "zz" "xy" "yz" "xz"``
+- MAT3F: full 3x3 in row-major tokens
+- TENS4FS: two-token pairs in Voigt-6 like ``"xxyy"``
+
+If names are not available, only integer or slice component selectors work.
+
+Usage examples
+==============
+Read all states and get displacement at a nodeset:
+
+>>> xp = xplt("run.xplt")
+>>> xp.readAllStates()
+>>> r = xp.results
+>>> U = r["displacement"]                  # NodeResultView or NodeRegionResultView
+>>> U0 = U.time(0).comp("x")               # first time, x-component, all nodes
+>>> Uset = U.nodes(xp.mesh.nodesets["base"]).comp("z")
+
+Direct slicing with the index operator on node results:
+
+>>> Uxz = r["displacement"][0, :, "x"]     # time 0, all nodes, x-comp
+
+Per-domain nodal results (FMT_NODE per region):
+
+>>> Ur = r["displacement"].region("arteria")
+>>> Ur_vals = Ur.time(":").nodes(slice(0, 10)).comp("y")
+
+Element item results:
+
+>>> S = r["von Mises"].domain("arteria")   # ItemResultView
+>>> S_last = S.time(-1).items([0, 5, 9]).comp(":")
+
+Per-element-node results:
+
+>>> Q = r["strain"].domain("arteria")      # MultResultView
+>>> Qpick = Q.time(0).items(0).enodes(":").comp("xx")
+
+Region vector results:
+
+>>> R = r["domain volume"].domain("arteria")  # RegionResultView
+>>> R_all_t = R.time(":").comp(":")
+
+Missing data
+------------
+If a variable is missing for a given time or region, the view returns arrays
+filled with NaN for that block. Shapes are preserved.
+
+All views convert outputs to float32 to keep memory usage low.
+
+Implementation notes
+--------------------
+- Domain and surface names are taken from the file when available.
+- Node ids in the file may be 1-based or 0-based. The reader normalizes them.
+- Connectivity and facet lists are right-padded with ``-1`` for uniform width.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +167,13 @@ Index = int | slice | Iterable[int] | np.ndarray | None
 
 
 def _norm_node_ids(ids: np.ndarray, N: int) -> np.ndarray:
+    """Normalize node ids to 0-based contiguous indices.
+
+    Accepts arrays that may be 0-based or 1-based. Verifies range and
+    converts to 0-based if needed.
+
+    Returns the normalized array with the same shape.
+    """
     a = np.asarray(ids, dtype=np.int64, order="C")
     if a.size == 0:
         return a
@@ -43,6 +191,11 @@ def _norm_node_ids(ids: np.ndarray, N: int) -> np.ndarray:
 
 
 class _FieldMeta:
+    """Lightweight metadata for a result variable.
+
+    Holds name, storage format, base data type, and component count.
+    """
+
     __slots__ = ("name", "fmt", "dtype", "ncomp")
 
     def __init__(self, name: str, fmt: Storage_Fmt, dtype: FEDataType):
@@ -65,10 +218,15 @@ _VOIGT6 = {"xx": 0, "yy": 1, "zz": 2, "yz": 3, "xz": 4, "xy": 5}
 
 
 def _normalize_comp_token(s: str) -> str:
+    """Normalize a component token.
+
+    Lowercases and strips spaces so user input is tolerant of formatting.
+    """
     return s.strip().lower().replace(" ", "")
 
 
 def _comp_names_for_dtype(dtype: FEDataType) -> tuple[str, ...] | None:
+    """Return valid component names for known data types or None."""
     if dtype == FEDataType.VEC3F:
         return _VEC3_ORDER
     if dtype == FEDataType.MAT3FD:
@@ -81,6 +239,10 @@ def _comp_names_for_dtype(dtype: FEDataType) -> tuple[str, ...] | None:
 
 
 def _tens4fs_pair_index(p: str) -> int:
+    """Map a 4th-order Voigt pair token like 'xxyy' to an index.
+
+    Uses a symmetric pair mapping with Voigt-6 order.
+    """
     p = _normalize_comp_token(p)
     if len(p) != 4:
         raise KeyError(f"invalid 4th-order token '{p}'")
@@ -94,6 +256,16 @@ def _tens4fs_pair_index(p: str) -> int:
 
 
 def _comp_spec_to_index(meta: _FieldMeta, spec: Index | str | Iterable[str]) -> Index:
+    """Convert a component selector to an integer, slice, array, or None.
+
+    Accepts:
+    - integer index
+    - Python slice
+    - NumPy index array
+    - string name like 'x' or 'xx'
+    - list of string names
+    - the string token ':' for all components
+    """
     if spec is None:
         return None
     if isinstance(spec, (int, slice, np.ndarray)):
@@ -130,6 +302,7 @@ def _comp_spec_to_index(meta: _FieldMeta, spec: Index | str | Iterable[str]) -> 
 
 
 def _as_index_list(sel: Index, T: int) -> List[int]:
+    """Normalize a selector to a list of integer indices."""
     if sel is None:
         return list(range(T))
     if isinstance(sel, int):
@@ -142,6 +315,7 @@ def _as_index_list(sel: Index, T: int) -> List[int]:
 
 
 def _shape_from_slice(n: int, s: Index) -> int:
+    """Compute the resulting length when a selector is applied."""
     if s is None:
         return n
     if isinstance(s, int):
@@ -156,6 +330,11 @@ def _shape_from_slice(n: int, s: Index) -> int:
 
 
 class _BaseView:
+    """Common behavior for result views.
+
+    Stores metadata and selection state for time and component axes.
+    """
+
     __slots__ = ("meta", "_times", "_comp_idx", "_t_idx")
 
     def __init__(self, meta: _FieldMeta, times: np.ndarray):
@@ -165,26 +344,55 @@ class _BaseView:
         self._t_idx: Index = None
 
     def time(self, idx: Index | str = None):
+        """Select time steps.
+
+        Accepts integer, slice, list/array, boolean mask, or ':' string.
+        Returns the view itself to allow chaining.
+        """
         if idx == ":":
             idx = slice(None)
         self._t_idx = idx  # type: ignore[assignment]
         return self
 
     def comp(self, idx: Index | str | Iterable[str]):
+        """Select components and compute the array.
+
+        Accepts integer, slice, list/array, or component names.
+        Returns a NumPy array with the current selections applied.
+        """
         self._comp_idx = _comp_spec_to_index(self.meta, idx)
         return self.eval()
 
     def dims(self) -> tuple[str, ...]:
+        """Describe array axes in order."""
         raise NotImplementedError
 
     def eval(self) -> np.ndarray:
+        """Build the array for the current selection."""
         raise NotImplementedError
 
     def __len__(self) -> int:
+        """Return the number of time steps."""
         return int(self._times.shape[0])
 
 
 class NodeResultView(_BaseView):
+    """Global nodal results (FMT_NODE).
+
+    dims() -> ('time', 'node', 'component')
+
+    Selection
+    ---------
+    - time(...)
+    - nodes(...)
+    - comp(...)
+
+    Shorthand
+    ---------
+    - view[t, nodes, comp]
+      where any of the three can be ':' for all.
+    """
+
     __slots__ = ("_per_t", "_mesh", "_node_idx")
 
     def __init__(
@@ -200,10 +408,12 @@ class NodeResultView(_BaseView):
         self._node_idx: Index = None
 
     def nodes(self, ids: Index):
+        """Select node rows by indices, slices, masks, or lists."""
         self._node_idx = ids
         return self
 
     def nodeset(self, name: str):
+        """Select by nodeset name from the mesh."""
         self._node_idx = self._mesh.nodesets[name]
         return self
 
@@ -211,6 +421,7 @@ class NodeResultView(_BaseView):
         return ("time", "node", "component")
 
     def eval(self) -> np.ndarray:
+        """Return an array with the current time, node, and component selection."""
         T_sel = _as_index_list(self._t_idx, len(self))
         N0 = next((a.shape[0] for a in self._per_t if a is not None), 0)
         C0 = self.meta.ncomp
@@ -236,7 +447,11 @@ class NodeResultView(_BaseView):
         return np.stack([_one(k) for k in T_sel], axis=0)
 
     def __getitem__(self, key):
-        # allow scalar time like view[0]
+        """Shorthand selection: [time, nodes, comp].
+
+        Any position can be ':' as a string for all. Missing positions default
+        to ':'.
+        """
         if not isinstance(key, tuple):
             t = key
             if isinstance(t, str) and t == ":":
@@ -273,7 +488,13 @@ class NodeResultView(_BaseView):
 
 
 class NodeRegionResultView(_BaseView):
-    """FMT_NODE split by regions (domains)."""
+    """Per-domain nodal results (FMT_NODE split by region).
+
+    dims() -> ('time', 'node_in_region', 'component')
+
+    You must first select a single region with ``region(name)`` when using
+    index-based shorthand selection.
+    """
 
     __slots__ = ("_per_name", "_node_idx", "_region_nodes")
 
@@ -290,11 +511,13 @@ class NodeRegionResultView(_BaseView):
         self._node_idx: Index = None
 
     def regions(self) -> List[str]:
+        """Return region names available for this variable."""
         return sorted(self._per_name.keys())
 
     domains = regions
 
     def region(self, name: str):
+        """Return a new view restricted to a single region."""
         if name not in self._per_name:
             raise KeyError(name)
         return NodeRegionResultView(
@@ -307,11 +530,16 @@ class NodeRegionResultView(_BaseView):
     domain = region
 
     def region_nodes(self) -> np.ndarray:
+        """Return the node ids of the selected region.
+
+        Only valid when the view holds a single region.
+        """
         if len(self._region_nodes) != 1:
             raise ValueError("multiple regions present; select region() first")
         return next(iter(self._region_nodes.values()))
 
     def nodes(self, ids: Index):
+        """Select nodes by indices relative to the region list."""
         self._node_idx = ids
         return self
 
@@ -324,6 +552,7 @@ class NodeRegionResultView(_BaseView):
         return next(iter(self._per_name.values()))
 
     def eval(self, *, region: str | None = None) -> np.ndarray:
+        """Return an array with the current selection."""
         per_t = self._pick_per_t() if region is None else self._per_name[region]
         T_sel = _as_index_list(self._t_idx, len(self))
         N0 = next((a.shape[0] for a in per_t if a is not None), 0)
@@ -376,7 +605,12 @@ class NodeRegionResultView(_BaseView):
 
 
 class ItemResultView(_BaseView):
-    """FMT_ITEM. One value per item (elements for domains, faces for surfaces)."""
+    """Per-item results (FMT_ITEM).
+
+    Items are elements for domains and faces for surfaces.
+
+    dims() -> ('time', 'item', 'component')
+    """
 
     __slots__ = ("_per_name", "_item_idx")
 
@@ -391,12 +625,14 @@ class ItemResultView(_BaseView):
         self._item_idx: Index = None
 
     def regions(self) -> List[str]:
+        """Return region names available for this variable."""
         return sorted(self._per_name.keys())
 
     domains = regions
     surfaces = regions
 
     def region(self, name: str):
+        """Return a new view restricted to a single region."""
         if name not in self._per_name:
             raise KeyError(name)
         return ItemResultView(self.meta, self._times, {name: self._per_name[name]})
@@ -405,6 +641,7 @@ class ItemResultView(_BaseView):
     surface = region
 
     def items(self, ids: Index):
+        """Select items by indices, slices, masks, or lists."""
         self._item_idx = ids
         return self
 
@@ -420,6 +657,7 @@ class ItemResultView(_BaseView):
         return next(iter(self._per_name.values()))
 
     def eval(self, *, region: str | None = None) -> np.ndarray:
+        """Return an array with the current selection."""
         per_t = self._pick_per_t() if region is None else self._per_name[region]
         T_sel = _as_index_list(self._t_idx, len(self))
         R0 = next((a.shape[0] for a in per_t if a is not None), 0)
@@ -446,6 +684,7 @@ class ItemResultView(_BaseView):
         return np.stack([_one(k) for k in T_sel], axis=0)
 
     def __getitem__(self, key):
+        """Shorthand selection: [time, item, comp]."""
         _ = self._pick_per_t()
         if not isinstance(key, tuple):
             t = key
@@ -493,12 +732,24 @@ class ItemResultView(_BaseView):
 
 @dataclass
 class MultBlock:
+    """Packed data for FMT_MULT.
+
+    data
+        3D array with shape (items, max_enodes, components). Cells for missing
+        enodes are filled with NaN.
+    nper
+        Number of valid enodes per item.
+    """
+
     data: np.ndarray  # (R, Kmax, C) float32 with NaN padding
     nper: np.ndarray  # (R,) int64
 
 
 class MultResultView(_BaseView):
-    """FMT_MULT. One value per node of each item."""
+    """Per-item per-element-node results (FMT_MULT).
+
+    dims() -> ('time', 'item', 'enode', 'component')
+    """
 
     __slots__ = ("_per_name", "_item_idx", "_enode_idx")
 
@@ -514,12 +765,14 @@ class MultResultView(_BaseView):
         self._enode_idx: Index = None
 
     def regions(self) -> List[str]:
+        """Return region names available for this variable."""
         return sorted(self._per_name.keys())
 
     domains = regions
     surfaces = regions
 
     def region(self, name: str):
+        """Return a new view restricted to a single region."""
         if name not in self._per_name:
             raise KeyError(name)
         return MultResultView(self.meta, self._times, {name: self._per_name[name]})
@@ -528,6 +781,7 @@ class MultResultView(_BaseView):
     surface = region
 
     def items(self, ids: Index):
+        """Select items by indices, slices, masks, or lists."""
         self._item_idx = ids
         return self
 
@@ -535,6 +789,7 @@ class MultResultView(_BaseView):
     faces = items
 
     def enodes(self, ids: Index):
+        """Select element-node positions by indices or slices."""
         self._enode_idx = ids
         return self
 
@@ -547,6 +802,7 @@ class MultResultView(_BaseView):
         return next(iter(self._per_name.values()))
 
     def eval(self, *, region: str | None = None) -> np.ndarray:
+        """Return an array with the current selection."""
         per_t = self._pick_per_t() if region is None else self._per_name[region]
         T_sel = _as_index_list(self._t_idx, len(self))
         first = next((mb for mb in per_t if mb is not None), None)
@@ -605,7 +861,10 @@ class MultResultView(_BaseView):
 
 
 class RegionResultView(_BaseView):
-    """FMT_REGION. One vector per region."""
+    """Per-region vector results (FMT_REGION).
+
+    dims() -> ('time', 'component')
+    """
 
     __slots__ = ("_per_name",)
 
@@ -619,12 +878,14 @@ class RegionResultView(_BaseView):
         self._per_name = per_name
 
     def regions(self) -> List[str]:
+        """Return region names available for this variable."""
         return sorted(self._per_name.keys())
 
     domains = regions
     surfaces = regions
 
     def region(self, name: str):
+        """Return a new view restricted to a single region."""
         if name not in self._per_name:
             raise KeyError(name)
         return RegionResultView(self.meta, self._times, {name: self._per_name[name]})
@@ -641,6 +902,7 @@ class RegionResultView(_BaseView):
         return next(iter(self._per_name.values()))
 
     def eval(self, *, region: str | None = None) -> np.ndarray:
+        """Return an array with the current selection."""
         per_t = self._pick_per_t() if region is None else self._per_name[region]
         T_sel = _as_index_list(self._t_idx, len(self))
         C0 = self.meta.ncomp
@@ -687,6 +949,21 @@ class RegionResultView(_BaseView):
 
 
 class Results:
+    """Container for all result views at all locations.
+
+    Access
+    ------
+    - ``results[name]`` returns the best-matching view for the variable name.
+      It checks in this order:
+        node, node_region, elem_item, face_item, elem_mult, face_mult,
+        elem_region, face_region.
+
+    Introspection
+    -------------
+    - ``len(results)`` returns number of time steps.
+    - ``results.times()`` returns the time vector.
+    """
+
     def __init__(self, times: Iterable[float]):
         self._times = np.asarray(list(times), float)
         self.node: Dict[str, NodeResultView] = {}  # global nodal
@@ -700,14 +977,17 @@ class Results:
         self._meta: Dict[str, _FieldMeta] = {}
 
     def __len__(self) -> int:
+        """Return number of time steps."""
         return int(self._times.shape[0])
 
     def times(self) -> np.ndarray:
+        """Return the time vector."""
         return self._times
 
     def register_node_global(
         self, name: str, meta: _FieldMeta, per_t: List[np.ndarray | None], mesh: Mesh
     ):
+        """Register a global nodal variable."""
         self._meta[name] = meta
         self.node[name] = NodeResultView(meta, self._times, per_t, mesh)
 
@@ -718,6 +998,7 @@ class Results:
         per_name: Dict[str, List[np.ndarray | None]],
         region_nodes: Dict[str, np.ndarray],
     ):
+        """Register a per-domain nodal variable."""
         self._meta[name] = meta
         self.node_region[name] = NodeRegionResultView(
             meta, self._times, per_name, region_nodes
@@ -730,6 +1011,7 @@ class Results:
         meta: _FieldMeta,
         per_name: Dict[str, List[np.ndarray | None]],
     ):
+        """Register an item variable for elements or faces."""
         self._meta[name] = meta
         v = ItemResultView(meta, self._times, per_name)
         if where == "elem":
@@ -744,6 +1026,7 @@ class Results:
         meta: _FieldMeta,
         per_name: Dict[str, List[MultBlock | None]],
     ):
+        """Register a per-element-node variable for elements or faces."""
         self._meta[name] = meta
         v = MultResultView(meta, self._times, per_name)
         if where == "elem":
@@ -758,6 +1041,7 @@ class Results:
         meta: _FieldMeta,
         per_name: Dict[str, List[np.ndarray | None]],
     ):
+        """Register a per-region vector variable for elements or faces."""
         self._meta[name] = meta
         v = RegionResultView(meta, self._times, per_name)
         if where == "elem":
@@ -766,6 +1050,7 @@ class Results:
             self.face_region[name] = v
 
     def __getitem__(self, key: str):
+        """Look up a variable by name across all locations."""
         if key in self.node:
             return self.node[key]
         if key in self.node_region:
@@ -799,7 +1084,21 @@ class Results:
 
 
 class xplt:
-    """FEBio .xplt reader with FMT_NODE (global and per-domain), FMT_ITEM, FMT_MULT, FMT_REGION."""
+    """FEBio ``.xplt`` reader.
+
+    Features
+    --------
+    - Global and per-domain FMT_NODE.
+    - FMT_ITEM, FMT_MULT, and FMT_REGION for domains and surfaces.
+    - Builds a :class:`Mesh` with parts, surfaces, and nodesets.
+
+    Typical use
+    -----------
+    >>> xp = xplt("run.xplt")
+    >>> xp.readAllStates()
+    >>> r = xp.results
+    >>> disp = r["displacement"][0, ":", "x"]
+    """
 
     def __init__(self, filename: str):
         self._reader = BinaryReader(filename)
@@ -863,6 +1162,7 @@ class xplt:
     # mesh
 
     def _readMesh(self):
+        """Parse node coordinates, domains, surfaces, and nodesets from the file."""
         self._reader.search_block("PLT_MESH")
 
         # nodes
@@ -1013,6 +1313,7 @@ class xplt:
                 self._part_id2name[pid] = pname
 
     def _build_mesh(self) -> Mesh:
+        """Build a :class:`Mesh` from parsed accumulators."""
         nodes = NodeArray(
             self._nodes_xyz if self._nodes_xyz is not None else np.zeros((0, 3), float)
         )
@@ -1052,7 +1353,11 @@ class xplt:
         )
 
     def _compute_domain_nodes(self) -> Dict[str, np.ndarray]:
-        """Domain -> unique global node indices used by its elements (order-preserving best-effort)."""
+        """Compute unique node lists per domain in original encounter order.
+
+        The output maps each domain name to the list of global node ids that
+        appear in its elements.
+        """
         out: Dict[str, np.ndarray] = {}
         conn = self.mesh.elements.conn
         nper = self.mesh.elements.nper
@@ -1074,6 +1379,7 @@ class xplt:
     # dictionary
 
     def _readDictStream(self, dictType: str, kind: str):
+        """Read one dictionary stream for a given kind (node/elem/face)."""
         self._reader.search_block(dictType)
         while self._reader.check_block("PLT_DIC_ITEM"):
             self._reader.search_block("PLT_DIC_ITEM")
@@ -1093,6 +1399,7 @@ class xplt:
             self._where[name] = kind
 
     def _readDict(self):
+        """Read and initialize dictionary and result buffers."""
         self.dictionary.clear()
         self._dict_order = {"node": [], "elem": [], "face": []}
         self._where = {}
@@ -1140,6 +1447,7 @@ class xplt:
 
     @staticmethod
     def _pack_mult(block_flat: np.ndarray, nper: np.ndarray, C: int) -> np.ndarray:
+        """Pack a flat MULT block into a padded 3D array."""
         R = int(nper.size)
         Kmax = int(nper.max()) if R > 0 else 0
         out = np.full((R, Kmax, C), np.nan, dtype=np.float32)
@@ -1152,6 +1460,7 @@ class xplt:
         return out
 
     def _flush_state_missing(self):
+        """Append per-state buffers and mark missing entries as None."""
         # node global
         for v in self._buf_node_global.keys():
             self._buf_node_global[v].append(self._state_node_global_seen.get(v, None))
@@ -1227,6 +1536,7 @@ class xplt:
         self._state_face_region_seen.clear()
 
     def _readResultStream(self, tag: str, kind: str):
+        """Read a result stream for node/elem/face in the current state."""
         order = self._dict_order[kind]
         _ = self._reader.search_block(tag)
         while self._reader.check_block("PLT_STATE_VARIABLE"):
@@ -1345,6 +1655,7 @@ class xplt:
                 self._reader.seek(self._reader.tell() + 4 * C * nrows, SEEK_SET)
 
     def _readState(self) -> int:
+        """Read one PLT_STATE. Returns 0 on success and non-zero to stop."""
         self._reader.search_block("PLT_STATE")
         self._reader.search_block("PLT_STATE_HEADER")
         self._reader.search_block("PLT_STATE_HDR_TIME")
@@ -1364,12 +1675,14 @@ class xplt:
         return 0
 
     def _skipState(self):
+        """Skip one PLT_STATE block."""
         size = self._reader.search_block("PLT_STATE")
         if size < 0:
             raise RuntimeError("No further PLT_STATE found while skipping")
         self._reader.skip(size)
 
     def readAllStates(self):
+        """Read all states in order and finalize results."""
         if self._readMode == "readSteps":
             raise RuntimeError("readAllStates incompatible with readSteps")
         while True:
@@ -1382,6 +1695,11 @@ class xplt:
         self._finalize_results()
 
     def readSteps(self, stepList: List[int]):
+        """Read a selected list of step indices and finalize results.
+
+        Steps are 0-based. The method advances by skipping blocks between
+        requested steps.
+        """
         if self._readMode == "readAllStates":
             raise RuntimeError("readSteps incompatible with readAllStates")
         for i, s in enumerate(stepList):
@@ -1396,6 +1714,7 @@ class xplt:
     # finalize
 
     def _finalize_results(self):
+        """Convert buffers into views and attach them to the Results object."""
         times = np.asarray(self._time, float)
         self.results = Results(times)
 
@@ -1446,6 +1765,7 @@ class xplt:
     # header
 
     def _read_xplt(self):
+        """Read file header then dictionary and mesh sections."""
         magic = int(struct.unpack("I", self._reader.read(4))[0])
         if magic != 4605250:
             raise RuntimeError("Not a valid xplt")
