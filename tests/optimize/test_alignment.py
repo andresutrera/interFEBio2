@@ -1,6 +1,7 @@
 import numpy as np
 
-from interFEBio.Optimize.alignment import Aligner, EvaluationGrid, ResidualAssembler
+from interFEBio.Optimize.alignment import Aligner, EvaluationGrid
+from interFEBio.Optimize.residuals import ResidualAssembler
 
 
 def test_aligner_linear():

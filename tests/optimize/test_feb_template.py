@@ -1,14 +1,13 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
+
 from interFEBio.Optimize.feb_bindings import (
-    AttrXPathBinding,
     BuildContext,
-    CallbackBinding,
     FebBuilder,
     FebTemplate,
-    MaterialParamBinding,
-    ScalarXPathBinding,
+    ParameterBinding,
 )
 
 
@@ -27,7 +26,9 @@ def _write_template(tmp_path: Path) -> Path:
       <v>0.30</v>
     </material>
   </Material>
-  <Control solver="febiolc" />
+  <Control>
+    <max_ups>10</max_ups>
+  </Control>
 </febio_spec>
 """
     p = tmp_path / "base.feb"
@@ -35,44 +36,52 @@ def _write_template(tmp_path: Path) -> Path:
     return p
 
 
-def test_template_render_applies_bindings(tmp_path: Path) -> None:
+def test_template_render_applies_parameter_bindings(tmp_path: Path) -> None:
     template_path = _write_template(tmp_path)
     template = FebTemplate(
         template_path,
         bindings=[
-            ScalarXPathBinding(
+            ParameterBinding(
                 theta_name="node_1",
                 xpath=".//Geometry/Nodes/node[@id='1']",
             ),
-            AttrXPathBinding(
-                theta_name="solver",
-                xpath=".//Control",
-                attr="solver",
-            ),
-            MaterialParamBinding(
+            ParameterBinding(
                 theta_name="young",
-                tag_name="E",
-                selector=("id", "1"),
+                xpath=".//Material/material[@id='1']/E",
             ),
-            CallbackBinding(
-                fn=lambda root, theta, ctx: ET.SubElement(
-                    root.find(".//Material/material"), "custom"
-                ).set("value", ctx.fmt % theta["custom"]),
+            ParameterBinding(
+                theta_name="max_ups",
+                xpath=".//Control/max_ups",
             ),
         ],
     )
 
-    theta = {"node_1": 2.5, "solver": 42, "young": 12.0, "custom": 3.14}
-    ctx = BuildContext(iter_id=3, case_name="specimen", fmt="%.4f")
+    theta = {"node_1": 2.5, "young": 12.0, "max_ups": 3.0}
+    ctx = BuildContext(fmt="%.4f")
 
     tree = template.render(theta, ctx)
     root = tree.getroot()
 
     assert root.find(".//Geometry/Nodes/node[@id='1']").text == "2.5000"
-    assert root.find(".//Control").attrib["solver"] == "42.0000"
-    assert root.find(".//Material/material/E").text == "12.0000"
-    custom = root.find(".//Material/material/custom")
-    assert custom is not None and custom.attrib["value"] == "3.1400"
+    assert root.find(".//Material/material[@id='1']/E").text == "12.0000"
+    assert root.find(".//Control/max_ups").text == "3.0000"
+
+
+def test_parameter_binding_optional_missing_nodes(tmp_path: Path) -> None:
+    template_path = _write_template(tmp_path)
+    template = FebTemplate(
+        template_path,
+        bindings=[ParameterBinding(theta_name="unused", xpath=".//missing", required=False)],
+    )
+    tree = template.render(theta={"unused": 1.0}, ctx=BuildContext())
+    assert tree.getroot().tag == "febio_spec"
+
+
+def test_parameter_binding_missing_value_raises(tmp_path: Path) -> None:
+    template_path = _write_template(tmp_path)
+    template = FebTemplate(template_path, bindings=[ParameterBinding("foo", ".//Control/max_ups")])
+    with pytest.raises(KeyError):
+        template.render(theta={}, ctx=BuildContext())
 
 
 def test_template_write_creates_parent(tmp_path: Path) -> None:
@@ -81,7 +90,7 @@ def test_template_write_creates_parent(tmp_path: Path) -> None:
     output_dir = tmp_path / "nested" / "caseA"
     out_path = output_dir / "out.feb"
 
-    template.write(theta={}, out_path=str(out_path), ctx=BuildContext(0, "case"))
+    template.write(theta={}, out_path=str(out_path))
 
     assert out_path.exists()
     tree = ET.parse(out_path)
@@ -93,12 +102,12 @@ def test_builder_creates_case_folder(tmp_path: Path) -> None:
     template = FebTemplate(template_path, bindings=[])
     builder = FebBuilder(template=template, subfolder="caseA")
 
-    feb_path, xplt_path = builder.build(
+    feb_path = builder.build(
         theta={},
         out_root=str(tmp_path),
         out_name="sim.feb",
-        ctx=BuildContext(iter_id=1, case_name="caseA", fmt="%.3f"),
+        ctx=BuildContext(fmt="%.3f"),
     )
 
     assert Path(feb_path).exists()
-    assert Path(xplt_path) == Path(tmp_path) / "caseA" / "sim.xplt"
+    assert Path(feb_path) == Path(tmp_path) / "caseA" / "sim.feb"

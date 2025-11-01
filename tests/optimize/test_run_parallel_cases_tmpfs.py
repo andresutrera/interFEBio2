@@ -61,9 +61,6 @@ def test_run_parallel_cases_with_tmpfs_backend(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setattr(rpc, "create_event_emitter", lambda path: collector)
 
     output_dir = tmp_path / "summary"
-    ramdisk = tmp_path / "ramdisk"
-    ramdisk.mkdir()
-
     args = [
         "--jobs",
         "2",
@@ -71,8 +68,6 @@ def test_run_parallel_cases_with_tmpfs_backend(monkeypatch, tmp_path: Path) -> N
         str(output_dir),
         "--storage-backend",
         "tmpfs",
-        "--tmpfs-base",
-        str(ramdisk),
         "--command",
         "fake",
         "--no-monitor",
@@ -92,11 +87,6 @@ def test_run_parallel_cases_with_tmpfs_backend(monkeypatch, tmp_path: Path) -> N
         assert log_path.exists()
         text = log_path.read_text(encoding="utf-8")
         assert "Step 5" in text
-
-    project_root = ramdisk / output_dir.name
-    assert project_root.exists()
-    manifests = list(project_root.glob("**/manifest.json"))
-    assert manifests, "expected storage manifests to be written"
 
     assert collector.events, "expected events to be emitted"
     statuses = [payload["status"] for _, event, payload in collector.events if event == "status"]

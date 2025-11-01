@@ -2,16 +2,10 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from interFEBio.Optimize.cases import (
-    ExperimentSeries,
-    PreprocessTask,
-    PostprocessTask,
-    SimulationAdapter,
-    SimulationCase,
-    TaskContext,
-    TaskPipeline,
-)
-from interFEBio.Optimize.feb_bindings import FebTemplate, MaterialParamBinding
+from interFEBio.Optimize.adapters import SimulationAdapter
+from interFEBio.Optimize.cases import SimulationCase
+from interFEBio.Optimize.experiments import ExperimentSeries
+from interFEBio.Optimize.feb_bindings import FebTemplate, ParameterBinding
 
 
 def _template_path() -> Path:
@@ -22,8 +16,8 @@ def test_simulation_case_prepare_and_collect(tmp_path: Path) -> None:
     template = FebTemplate(
         _template_path(),
         bindings=[
-            MaterialParamBinding(theta_name="k", tag_name="k", selector=("id", "1")),
-            MaterialParamBinding(theta_name="G", tag_name="G", selector=("id", "1")),
+            ParameterBinding(theta_name="k", xpath=".//Material/material[@id='1']/k"),
+            ParameterBinding(theta_name="G", xpath=".//Material/material[@id='1']/G"),
         ],
     )
 
@@ -34,30 +28,25 @@ def test_simulation_case_prepare_and_collect(tmp_path: Path) -> None:
         "exp1": SimulationAdapter(lambda path: (np.array([0.0, 1.0]), np.array([1.0, 3.0])))
     }
 
-    pipeline = TaskPipeline()
-    pipeline.add_pre(PreprocessTask(lambda ctx: ctx))
-    pipeline.add_post(PostprocessTask(lambda ctx: ctx))
-
     case = SimulationCase(
         template=template,
         subfolder="caseA",
         experiments=experiments,
         adapters=adapters,
-        tasks=pipeline,
     )
 
     theta = {"k": 12.0, "G": 8.0}
-    feb_path, xplt_path, task_ctx = case.prepare(theta, tmp_path)
+    feb_path = case.prepare(theta, tmp_path)
     assert feb_path.exists()
-    xplt_path.write_text("", encoding="utf-8")
-    assert task_ctx["theta"] == theta
 
-    results, post_ctx = case.collect(xplt_path, task_ctx)
+    xplt_path = feb_path.with_suffix(".xplt")
+    xplt_path.write_text("", encoding="utf-8")
+
+    results = case.collect(feb_path)
     assert "exp1" in results
     x, y = results["exp1"]
     np.testing.assert_array_equal(x, np.array([0.0, 1.0]))
     np.testing.assert_array_equal(y, np.array([1.0, 3.0]))
-    assert "results" in post_ctx
 
 
 def test_simulation_case_missing_adapter_raises() -> None:

@@ -27,14 +27,9 @@ from typing import Iterable, List, Optional, Sequence
 import numpy as np
 
 from interFEBio.Optimize.Parameters import ParameterSpace
-from interFEBio.Optimize.feb_bindings import (
-    BuildContext,
-    FebBuilder,
-    FebTemplate,
-    MaterialParamBinding,
-)
+from interFEBio.Optimize.feb_bindings import BuildContext, FebBuilder, FebTemplate, ParameterBinding
 from interFEBio.Optimize.monitor import JobView, MonitorFSView, ProgressAggregator
-from interFEBio.Optimize.Storage import StorageManager, TmpfsBackend
+from interFEBio.Optimize.Storage import StorageManager
 from interFEBio.Optimize.runners import LocalParallelRunner, RunHandle, RunResult
 from interFEBio.Optimize.webui import MonitorWebUIServer
 from interFEBio.monitoring.events import EventEmitter, create_event_emitter
@@ -49,8 +44,6 @@ class Case:
     job_dir: Path
     feb_path: Path
     stdout_log: Path
-    storage_case: Optional[str]
-    storage_tag: Optional[str]
     handle: RunHandle
 
 
@@ -108,13 +101,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--storage-backend",
         choices=["none", "tmpfs"],
         default="none",
-        help="Optional storage backend to manage outputs (default: none).",
-    )
-    parser.add_argument(
-        "--tmpfs-base",
-        type=Path,
-        default=None,
-        help="Base directory for TmpfsBackend when --storage-backend=tmpfs.",
+        help="Use 'tmpfs' to place runs under /tmp/<project>; defaults to disk output.",
     )
     parser.add_argument(
         "--webui-port",
@@ -146,8 +133,8 @@ def build_cases(
     template = FebTemplate(
         template_path,
         bindings=[
-            MaterialParamBinding(theta_name="k", tag_name="k", selector=("id", "1")),
-            MaterialParamBinding(theta_name="G", tag_name="G", selector=("id", "1")),
+            ParameterBinding(theta_name="k", xpath=".//Material/material[@id='1']/k"),
+            ParameterBinding(theta_name="G", xpath=".//Material/material[@id='1']/G"),
         ],
     )
     builder = FebBuilder(template=template, subfolder="run")
@@ -159,14 +146,14 @@ def build_cases(
             name: float(val) for name, val in zip(parameter_space.names, theta_vec)
         }
         case_dir = output_dir / f"case_{idx}"
-        ctx = BuildContext(iter_id=idx, case_name=f"case{idx}", fmt="%.6f")
-        feb_path_str, _ = builder.build(
+        ctx = BuildContext(fmt="%.6f")
+        feb_path = builder.build(
             theta=theta_dict,
             out_root=str(case_dir),
             out_name=f"simpleBiaxial_{idx}.feb",
             ctx=ctx,
         )
-        feb_path = Path(feb_path_str).resolve()
+        feb_path = Path(feb_path).resolve()
         stdout_log = feb_path.with_suffix(".log")
         try:
             stdout_log.unlink()
@@ -181,68 +168,6 @@ def build_cases(
                 "job_dir": feb_path.parent,
                 "feb_path": feb_path,
                 "stdout_log": stdout_log,
-                "storage_case": None,
-                "storage_tag": None,
-            }
-        )
-    return cases
-
-
-def build_cases_storage(
-    storage: StorageManager,
-    iter_id: int,
-    template_path: Path,
-    parameter_space: ParameterSpace,
-    phi_vectors: Sequence[np.ndarray],
-) -> List[dict]:
-    template = FebTemplate(
-        template_path,
-        bindings=[
-            MaterialParamBinding(theta_name="k", tag_name="k", selector=("id", "1")),
-            MaterialParamBinding(theta_name="G", tag_name="G", selector=("id", "1")),
-        ],
-    )
-    builder = FebBuilder(template=template, subfolder="")
-
-    cases: List[dict] = []
-    for idx, phi in enumerate(phi_vectors):
-        theta_vec = parameter_space.theta_from_phi(phi)
-        theta_dict = {
-            name: float(val) for name, val in zip(parameter_space.names, theta_vec)
-        }
-        case_name = f"case_{idx}"
-        tag = "run"
-        job_dir = storage.job_dir(iter_id, case_name, tag)
-        ctx = BuildContext(iter_id=iter_id, case_name=case_name, fmt="%.6f")
-        feb_path_str, _ = builder.build(
-            theta=theta_dict,
-            out_root=str(job_dir),
-            out_name=f"{case_name}.feb",
-            ctx=ctx,
-        )
-        feb_path = Path(feb_path_str).resolve()
-        stdout_log = feb_path.with_suffix(".log")
-        try:
-            stdout_log.unlink()
-        except FileNotFoundError:
-            pass
-        storage.begin_job(
-            iter_id,
-            case_name,
-            tag,
-            meta={"phi": phi.tolist(), "theta": theta_dict},
-        )
-        cases.append(
-            {
-                "idx": idx,
-                "key": case_name,
-                "phi": phi.tolist(),
-                "theta": theta_dict,
-                "job_dir": feb_path.parent,
-                "feb_path": feb_path,
-                "stdout_log": stdout_log,
-                "storage_case": case_name,
-                "storage_tag": tag,
             }
         )
     return cases
@@ -301,8 +226,6 @@ def launch_cases(
             job_dir=job_dir,
             feb_path=feb_path,
             stdout_log=data["stdout_log"],
-            storage_case=data.get("storage_case"),
-            storage_tag=data.get("storage_tag"),
             handle=handle,
         )
         running.append(case)
@@ -319,8 +242,11 @@ def collect_results(running: List[Case]) -> List[tuple[Case, RunResult]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    output_dir = args.output.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.storage_backend == "tmpfs":
+        output_dir = StorageManager(use_tmp=True).resolve()
+    else:
+        output_dir = args.output.resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
     emitter = create_event_emitter(args.event_socket)
 
     template_path = (
@@ -340,42 +266,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         np.array([-0.75, 0.25]),
     ]
 
-    use_storage = args.storage_backend != "none"
-    storage: Optional[StorageManager] = None
-    iter_id = 0
-    case_names = [f"case_{idx}" for idx in range(len(phi_vectors))]
-
-    if use_storage:
-        if args.storage_backend == "tmpfs":
-            backend = TmpfsBackend(base=args.tmpfs_base)
-        else:
-            raise ValueError(f"Unsupported storage backend: {args.storage_backend}")
-        project_name = args.output.name or "run_parallel"
-        storage = StorageManager(backend=backend, project=project_name)
-        zero_phi = np.zeros(len(parameter_space.names))
-        theta0 = parameter_space.theta_from_phi(zero_phi)
-        storage.begin_iter(
-            iter_id,
-            phi={name: 0.0 for name in parameter_space.names},
-            theta={
-                name: float(val) for name, val in zip(parameter_space.names, theta0)
-            },
-            cases=case_names,
-        )
-        cases = build_cases_storage(
-            storage,
-            iter_id,
-            template_path,
-            parameter_space,
-            phi_vectors,
-        )
-    else:
-        cases = build_cases(
-            output_dir,
-            template_path,
-            parameter_space,
-            phi_vectors,
-        )
+    cases = build_cases(
+        output_dir,
+        template_path,
+        parameter_space,
+        phi_vectors,
+    )
 
     view = MonitorFSView()
     job_views = [
@@ -410,11 +306,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"[runner] Using command: {' '.join(command)}")
         print(f"[runner] Writing cases under: {output_dir}")
 
-    tee_stream = None if args.quiet else sys.stdout
     runner = LocalParallelRunner(
         n_jobs=args.jobs,
         command=command,
-        tee_stream=tee_stream,
     )
     results: List[tuple[Case, RunResult]] = []
     aggregator: Optional[ProgressAggregator] = None
@@ -459,28 +353,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         for case, result in results:
             final_status = "finished" if result.exit_code == 0 else "failed"
-            if storage and case.storage_case and case.storage_tag:
-                storage.register_artifact(
-                    iter_id,
-                    case.storage_case,
-                    case.storage_tag,
-                    case.feb_path,
-                    kind="feb",
-                )
-                if case.stdout_log.exists():
-                    storage.register_artifact(
-                        iter_id,
-                        case.storage_case,
-                        case.storage_tag,
-                        case.stdout_log,
-                        kind="log",
-                    )
-                storage.end_job(
-                    iter_id,
-                    case.storage_case,
-                    case.storage_tag,
-                    status="done" if result.exit_code == 0 else "failed",
-                )
             update_status(
                 view,
                 aggregator,
@@ -496,9 +368,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if aggregator:
             aggregator.stop(force_render=True)
         runner.shutdown()
-
-    if storage is not None:
-        storage.end_iter(iter_id, summary={"cases": len(results)}, is_best=False)
 
     if not args.quiet:
         for case, result in results:
