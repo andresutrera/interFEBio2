@@ -5,13 +5,13 @@ from __future__ import annotations
 import atexit
 import os
 import subprocess
+import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Sequence
-from contextlib import suppress
-import threading
 
 
 @dataclass

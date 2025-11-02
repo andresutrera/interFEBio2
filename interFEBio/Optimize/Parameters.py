@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
-import math
+
 import numpy as np
 from numpy.typing import NDArray
 

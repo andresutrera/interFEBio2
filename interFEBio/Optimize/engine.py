@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -16,16 +17,13 @@ from typing import (
     Set,
     cast,
 )
-import shutil
 
 import numpy as np
 from numpy.typing import NDArray
 from prettytable import PrettyTable
 
 from ..Log import Log
-from .Parameters import ParameterSpace
-from .Storage import StorageManager
-from .alignment import EvaluationGrid, Aligner, GridPolicy
+from .alignment import Aligner, EvaluationGrid, GridPolicy
 from .cases import SimulationCase
 from .jacobian import JacobianComputer
 from .optimizers import (
@@ -33,9 +31,10 @@ from .optimizers import (
     ScipyLeastSquaresAdapter,
     ScipyMinimizeAdapter,
 )
+from .Parameters import ParameterSpace
 from .residuals import ResidualAssembler
 from .runners import LocalParallelRunner, LocalSerialRunner, RunHandle, Runner
-
+from .Storage import StorageManager
 
 Array = NDArray[np.float64]
 

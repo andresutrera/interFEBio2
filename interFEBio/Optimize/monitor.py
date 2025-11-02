@@ -8,12 +8,12 @@ or CLI can consume without interfering with long-running simulations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-from pathlib import Path
-from typing import Dict, Iterable, List, Optional, TextIO
 import re
 import threading
 import time
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, TextIO
 
 from interFEBio.monitoring.events import EventEmitter, NullEventEmitter
 

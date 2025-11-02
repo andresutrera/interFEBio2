@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 
 from .alignment import Aligner, EvaluationGrid
 
-
 Array = NDArray[np.float64]
 WeightFunction = Callable[[Array], Array]
 

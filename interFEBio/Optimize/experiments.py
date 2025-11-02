@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Sequence, Tuple
+from typing import Callable, Tuple
 
 import numpy as np
 

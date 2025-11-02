@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
-import shutil
-import warnings
 
 
 def _unescape_mount_token(token: str) -> str:
