@@ -10,7 +10,7 @@ import warnings
 
 
 def _unescape_mount_token(token: str) -> str:
-    """Decode the escape sequences used in /proc/mounts."""
+    """Decode escape sequences used in ``/proc/mounts`` entries."""
     return (
         token.replace("\\040", " ")
         .replace("\\011", "\t")
@@ -20,11 +20,7 @@ def _unescape_mount_token(token: str) -> str:
 
 
 def _filesystem_type(path: Path) -> str | None:
-    """
-    Best-effort detection of the filesystem type at `path`.
-
-    Returns ``None`` when the platform does not expose /proc/mounts.
-    """
+    """Return the filesystem type for ``path`` when it can be determined."""
     mounts = Path("/proc/mounts")
     if not mounts.exists():
         return None
@@ -86,6 +82,7 @@ class StorageManager:
         return root
 
     def _resolve_tmp(self) -> Path:
+        """Resolve a temporary storage directory under ``/tmp``."""
         tmp_root = Path("/tmp")
         fs_type = _filesystem_type(tmp_root)
         if fs_type is not None and fs_type.lower() != "tmpfs":
@@ -106,6 +103,7 @@ class StorageManager:
         return root
 
     def cleanup_path(self, path: Path) -> None:
+        """Remove a file or directory tree under the storage root."""
         target = Path(path)
         if not target.exists():
             return
@@ -115,6 +113,7 @@ class StorageManager:
             target.unlink(missing_ok=True)
 
     def cleanup_all(self, keep: Iterable[Path] | None = None) -> None:
+        """Remove all children under the storage root except entries in ``keep``."""
         root = self.resolve()
         keep_set = {Path(p).resolve() for p in (keep or [])}
         for child in root.iterdir():

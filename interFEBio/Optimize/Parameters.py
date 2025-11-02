@@ -1,4 +1,5 @@
-# interFEBio/Optimize/parameters.py
+"""Parameter reparameterisation utilities for optimisation workflows."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,16 +17,11 @@ class Parameter:
     """
     Scalar optimisation parameter metadata.
 
-    Parameters
-    ----------
-    name
-        Identifier used in θ-space mappings and FEB templates.
-    theta0
-        Initial value in θ-space.
-    vary
-        When ``False`` the parameter is kept fixed during optimisation.
-    bounds
-        Optional lower/upper limits in θ-space.
+    Attributes:
+        name: Identifier used in θ-space mappings and FEB templates.
+        theta0: Initial value in θ-space.
+        vary: Flag indicating whether this parameter is optimised.
+        bounds: Optional lower/upper limits in θ-space.
     """
 
     name: str
@@ -50,11 +46,9 @@ class ParameterSpace:
 
         θ_i = θ0_i * ξ**φ_i
 
-    where ξ is shared across parameters. The exponential reparameterisation keeps θ
-    positive while allowing unconstrained optimisation in φ-space.
-
-    Parameters can be provided all at once using the legacy constructor arguments
-    ``names``/``theta0`` or incrementally via :meth:`add_parameter`.
+    The exponential reparameterisation keeps θ positive while allowing unconstrained
+    optimisation in φ-space. Parameters can be supplied either through the legacy
+    constructor arguments or incrementally via :meth:`add_parameter`.
     """
 
     def __init__(
@@ -114,13 +108,11 @@ class ParameterSpace:
         vary: bool = True,
         bounds: tuple[float | None, float | None] | None = None,
     ) -> Parameter:
-        """
-        Register a new optimisation parameter.
+        """Register a new optimisation parameter.
 
         Parameters can be supplied either as a :class:`Parameter` instance or through
         the keyword arguments ``name``/``theta0``/``vary``/``bounds``.
         """
-
         if parameter is None:
             if name is None or theta0 is None:
                 raise ValueError("Provide a Parameter instance or name/theta0 pair.")
@@ -128,7 +120,7 @@ class ParameterSpace:
                 name=name,
                 theta0=float(theta0),
                 vary=bool(vary),
-            bounds=bounds if bounds is not None else (None, None),
+                bounds=bounds if bounds is not None else (None, None),
             )
         elif not isinstance(parameter, Parameter):
             raise TypeError("parameter must be a Parameter instance.")
@@ -142,14 +134,17 @@ class ParameterSpace:
 
     # ---------- mapping ----------
     def theta_from_phi(self, phi_vec: Array) -> Array:
+        """Map φ values to θ-space."""
         phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
         return cast(Array, self._theta0_vec * np.power(self.xi, phi_vec))
 
     def dtheta_dphi(self, phi_vec: Array) -> Array:
+        """Return ∂θ/∂φ for the provided φ vector."""
         theta = self.theta_from_phi(phi_vec)
         return cast(Array, theta * self._ln_xi)
 
     def phi_from_theta(self, theta_vec: Array) -> Array:
+        """Map θ values back into φ-space."""
         theta_vec = cast(Array, np.asarray(theta_vec, dtype=float))
         ratio = theta_vec / self._theta0_vec
         if np.any(ratio <= 0.0):
@@ -158,7 +153,7 @@ class ParameterSpace:
 
     # ---------- bounds ----------
     def phi_bounds(self) -> tuple[Array, Array] | None:
-        """Transform theta-bounds to phi-bounds for scipy."""
+        """Transform θ-space bounds into φ-space bounds."""
         if self._th_lo is None and self._th_hi is None:
             return None
         lo = cast(Array, np.full(len(self._names), -np.inf, dtype=float))
@@ -172,6 +167,7 @@ class ParameterSpace:
         return lo, hi
 
     def clamp_theta(self, theta_vec: Array) -> Array:
+        """Clamp θ values according to stored bounds."""
         if self._th_lo is None and self._th_hi is None:
             return theta_vec
         out = cast(Array, np.asarray(theta_vec, dtype=float).copy())
@@ -183,18 +179,16 @@ class ParameterSpace:
 
     # ---------- masks and packing ----------
     def active_mask(self) -> BoolArray:
+        """Return a boolean mask describing which parameters vary."""
         return cast(BoolArray, self._vary_vec.copy())
 
     def pack_dict(self, d: Mapping[str, float]) -> Array:
-        return cast(
-            Array, np.asarray([float(d[k]) for k in self._names], dtype=float)
-        )
+        """Pack a parameter dictionary into a vector ordered by ``names``."""
+        return cast(Array, np.asarray([float(d[k]) for k in self._names], dtype=float))
 
     def unpack_vec(self, v: Sequence[float]) -> Dict[str, float]:
-        return {
-            k: float(x)
-            for k, x in zip(self._names, np.asarray(v, dtype=float))
-        }
+        """Convert a vector into a parameter dictionary."""
+        return {k: float(x) for k, x in zip(self._names, np.asarray(v, dtype=float))}
 
     # ---------- Jacobian / gradient transforms ----------
     # J_theta: (m, n) = ∂r/∂theta ; returns ∂r/∂phi
@@ -210,7 +204,7 @@ class ParameterSpace:
     def wrap_residual(
         self, residual_theta: Callable[[Array], Array]
     ) -> Callable[[Array], Array]:
-        """phi -> r(phi) = r(theta(phi))"""
+        """Produce a residual function defined in φ-space."""
 
         def fun(phi_vec: Array) -> Array:
             theta = self.theta_from_phi(phi_vec)
@@ -224,10 +218,7 @@ class ParameterSpace:
         residual_theta: Callable[[Array], Array],
         jac_theta: Callable[[Array], Array] | None = None,
     ) -> Callable[[Array], Array]:
-        """
-        If jac_theta is provided: return analytic J_phi.
-        Else: return directional transform using finite differences on phi not provided here.
-        """
+        """Produce a Jacobian function defined in φ-space."""
         if jac_theta is None:
             # user can provide their own FD in phi-space; we keep interface explicit
             raise ValueError(
@@ -253,6 +244,7 @@ class ParameterSpace:
 
     @property
     def theta_bounds(self) -> Dict[str, tuple[float | None, float | None]]:
+        """Return θ-space bounds keyed by parameter name."""
         return dict(self._bounds_map)
 
     @property

@@ -36,6 +36,7 @@ class RunHandle:
     _future: Future[RunResult]
 
     def wait(self, timeout: float | None = None) -> RunResult:
+        """Block until the underlying future completes."""
         return self._future.result(timeout)
 
     def done(self) -> bool:  # pragma: no cover - passthrough convenience
@@ -61,6 +62,7 @@ class Runner:
         *,
         env: dict[str, str] | None = None,
     ) -> RunHandle:
+        """Schedule a FEBio run and return a handle for tracking completion."""
         raise NotImplementedError
 
     def shutdown(self) -> None:  # pragma: no cover - simple default
@@ -93,12 +95,14 @@ class _BaseLocalRunner(Runner):
         *,
         env: dict[str, str] | None = None,
     ) -> RunHandle:
+        """Schedule a FEBio run and return a handle for tracking completion."""
         job_path = Path(job_dir)
         feb_path = Path(feb_name)
         future = self._executor.submit(self._run_once, job_path, feb_path, env)
         return RunHandle(future)
 
     def shutdown(self) -> None:
+        """Terminate any active jobs and stop the worker pool."""
         with self._active_lock:
             procs = list(self._active)
         for proc in procs:
@@ -116,6 +120,7 @@ class _BaseLocalRunner(Runner):
         feb_name: Path,
         env: dict[str, str] | None = None,
     ) -> RunResult:
+        """Execute a single FEBio command within the worker pool."""
         job_path.mkdir(parents=True, exist_ok=True)
         feb_path = feb_name if feb_name.is_absolute() else job_path / feb_name
         if not feb_path.exists():

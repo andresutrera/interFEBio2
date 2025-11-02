@@ -1,3 +1,5 @@
+"""Adapters that bridge scipy optimisers to the engine interface."""
+
 from __future__ import annotations
 
 from typing import Callable, Iterable, Sequence, cast
@@ -9,6 +11,8 @@ Callback = Callable[[np.ndarray, float], None]
 
 
 class OptimizerAdapter:
+    """Abstract interface implemented by optimiser adapters."""
+
     def minimize(
         self,
         fun: Callable[[np.ndarray], np.ndarray],
@@ -17,10 +21,14 @@ class OptimizerAdapter:
         bounds: BoundsLike,
         callbacks: Iterable[Callback] | None = None,
     ) -> tuple[np.ndarray, dict]:
+        """Minimise the objective using the configured optimiser."""
+        """Minimise the objective using the configured optimiser."""
         raise NotImplementedError
 
 
 class ScipyLeastSquaresAdapter(OptimizerAdapter):
+    """Adapter that wraps :func:`scipy.optimize.least_squares`."""
+
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
@@ -50,7 +58,11 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
         if bounds is None:
             lower = np.full_like(phi0, -np.inf, dtype=float)
             upper = np.full_like(phi0, np.inf, dtype=float)
-        elif isinstance(bounds, tuple) and len(bounds) == 2 and all(isinstance(b, np.ndarray) for b in bounds):
+        elif (
+            isinstance(bounds, tuple)
+            and len(bounds) == 2
+            and all(isinstance(b, np.ndarray) for b in bounds)
+        ):
             lower = np.asarray(bounds[0], dtype=float)
             upper = np.asarray(bounds[1], dtype=float)
         else:
@@ -75,6 +87,8 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
 
 
 class ScipyMinimizeAdapter(OptimizerAdapter):
+    """Adapter that wraps :func:`scipy.optimize.minimize`."""
+
     def __init__(self, method: str = "L-BFGS-B", **kwargs):
         self.method = method
         self.kwargs = kwargs
@@ -110,7 +124,11 @@ class ScipyMinimizeAdapter(OptimizerAdapter):
             for cb in cb_list:
                 cb(vec, cost)
 
-        if isinstance(bounds, tuple) and len(bounds) == 2 and all(isinstance(b, np.ndarray) for b in bounds):
+        if (
+            isinstance(bounds, tuple)
+            and len(bounds) == 2
+            and all(isinstance(b, np.ndarray) for b in bounds)
+        ):
             lower = np.asarray(bounds[0], dtype=float)
             upper = np.asarray(bounds[1], dtype=float)
             min_bounds: Sequence[tuple[float, float]] | None = list(

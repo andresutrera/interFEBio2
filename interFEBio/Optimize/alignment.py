@@ -1,3 +1,5 @@
+"""Utilities for selecting evaluation grids and aligning simulation data."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,10 +16,26 @@ GridPolicy = Literal["exp_to_sim", "sim_to_exp", "fixed_user"]
 
 @dataclass
 class EvaluationGrid:
+    """Policy-driven evaluation grid selection.
+
+    Attributes:
+        policy: Grid policy that controls how experimental and simulation domains are matched.
+        common_grid: Shared grid used when the policy is ``"fixed_user"``.
+    """
+
     policy: GridPolicy
     common_grid: Array | None = None
 
     def select_grid(self, x_exp: Array, x_sim: Array) -> Array:
+        """Choose the evaluation grid for an experiment/simulation pair.
+
+        Args:
+            x_exp: Experimental abscissa samples.
+            x_sim: Simulation abscissa samples.
+
+        Returns:
+            Grid where residuals should be evaluated.
+        """
         if self.policy == "exp_to_sim":
             return cast(Array, np.asarray(x_sim, dtype=float))
         if self.policy == "sim_to_exp":
@@ -30,11 +48,29 @@ class EvaluationGrid:
 
 
 class Aligner:
+    """Interpolation helper that projects data onto a target grid."""
+
     def __init__(self, kind: str = "linear", fill_value: float = 0.0):
+        """Configure interpolation behaviour.
+
+        Args:
+            kind: Interpolation scheme, ``"linear"`` or ``"nearest"``.
+            fill_value: Value used outside the known domain.
+        """
         self.kind = kind
         self.fill_value = fill_value
 
     def map(self, x_src: Array, y_src: Array, x_tgt: Array) -> Array:
+        """Interpolate source data onto a target grid.
+
+        Args:
+            x_src: Source abscissa samples.
+            y_src: Source ordinate samples.
+            x_tgt: Target grid where values are required.
+
+        Returns:
+            Interpolated ordinate values on ``x_tgt``.
+        """
         x_src = cast(Array, np.asarray(x_src, dtype=float))
         y_src = cast(Array, np.asarray(y_src, dtype=float))
         x_tgt = cast(Array, np.asarray(x_tgt, dtype=float))

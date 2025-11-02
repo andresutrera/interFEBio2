@@ -38,6 +38,7 @@ class JacobianComputer:
         label_fn: Callable[[int], str | None] | None = None,
         base_residual: Array | None = None,
     ) -> tuple[Array, Array]:
+        """Compute residuals and a forward-difference Jacobian."""
         phi0 = cast(Array, np.asarray(phi0, dtype=float))
         theta0 = theta_fn(phi0)
         base_label = label_fn(-1) if label_fn is not None else None
@@ -80,9 +81,8 @@ class JacobianComputer:
         return r0, J
 
     @staticmethod
-    def _residual_accepts_label(
-        residual_fn: Callable[..., Array]
-    ) -> bool:
+    def _residual_accepts_label(residual_fn: Callable[..., Array]) -> bool:
+        """Return True when the residual callable accepts a label argument."""
         sig = inspect.signature(residual_fn)
         positional = [
             p
@@ -103,6 +103,7 @@ class JacobianComputer:
         label: str | None,
         accepts_label: bool,
     ) -> Array:
+        """Dispatch to the residual callable, passing the label when required."""
         if accepts_label:
             return residual_fn(theta, label)
         return residual_fn(theta)

@@ -27,6 +27,7 @@ class BuildContext:
     namespaces: Dict[str, str] = field(default_factory=dict)
 
     def format_value(self, value: Number) -> str:
+        """Format a scalar value according to the ``fmt`` pattern."""
         return self.fmt % float(value)
 
 
@@ -49,6 +50,7 @@ class ParameterBinding:
         theta: Mapping[str, Number],
         ctx: BuildContext,
     ) -> None:
+        """Insert formatted values into all nodes matched by ``xpath``."""
         if self.theta_name not in theta:
             raise KeyError(f"theta value '{self.theta_name}' not provided")
 
@@ -78,6 +80,7 @@ class FebTemplate:
         self.bindings = list(self.bindings)
 
     def add_binding(self, binding: ParameterBinding) -> None:
+        """Register an additional binding for this template."""
         self.bindings.append(binding)
 
     def render(
@@ -85,6 +88,7 @@ class FebTemplate:
         theta: Mapping[str, Number],
         ctx: BuildContext | None = None,
     ) -> ET.ElementTree:
+        """Render the template into an XML tree using the supplied parameters."""
         ctx = ctx or BuildContext()
         tree = cast(ET.ElementTree, ET.parse(self.template_path))
         root = cast(ET.Element, tree.getroot())
@@ -98,6 +102,7 @@ class FebTemplate:
         out_path: Path | str,
         ctx: BuildContext | None = None,
     ) -> Path:
+        """Render and write the template to ``out_path``."""
         tree = self.render(theta, ctx)
         out_file = Path(out_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -119,6 +124,7 @@ class FebBuilder:
         out_name: str | None = None,
         ctx: BuildContext | None = None,
     ) -> Path:
+        """Render the template into the case subfolder and return the FEB path."""
         ctx = ctx or BuildContext()
         sim_dir = Path(out_root) / self.subfolder
         sim_dir.mkdir(parents=True, exist_ok=True)

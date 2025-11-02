@@ -54,51 +54,11 @@ class _CaseState:
 
 
 class Engine:
-    """
-    High-level optimisation driver combining FEB building, execution, and fitting.
+    """Coordinate FEBio simulations and optimisation loops.
 
-    Parameters
-    ----------
-    parameter_space
-        Mapping between optimisation parameters (φ) and physical parameters (θ).
-    cases
-        Collection of simulation cases to run for each residual evaluation.
-    grid_policy
-        Policy string understood by :class:`EvaluationGrid`.
-    grid_values
-        Optional grid values for ``fixed_user`` policies.
-    use_jacobian
-        Set to ``True`` to compute forward-difference Jacobians each iteration.
-    jacobian_perturbation
-        Step size applied to each optimisation parameter when estimating the Jacobian.
-    jacobian_parallel
-        Informational flag indicating whether Jacobian evaluations should be scheduled in
-        parallel; the engine still respects the runner job pool ``runner_jobs``.
-    cleanup_previous
-        When ``True``, delete artifacts from older iterations as new ones are produced,
-        retaining the best (if known) and the most recent iteration.
-    cleanup_mode
-        Final cleanup behaviour when optimisation ends (or is interrupted): ``"none"``
-        keeps all outputs, ``"retain_best"`` preserves only the best iteration, and
-        ``"all"`` removes everything under the storage directory.
-    optimizer
-        String selector for the optimiser; ``\"least_squares\"`` and ``\"minimize\"`` supported.
-    optimizer_options
-        Keyword arguments forwarded to the optimiser adapter.
-    runner_jobs
-        Number of parallel FEBio jobs to launch per residual evaluation.
-    runner_command
-        Command tuple used to invoke FEBio (default ``(\"febio4\", \"-i\")``).
-    runner_env
-        Optional environment overrides for launched processes.
-    storage_mode
-        Either ``\"disk\"`` or ``\"tmp\"``; controls placement of generated FEBio files.
-    storage_root
-        Optional root directory. When ``storage_mode='disk'`` this path is used directly;
-        when ``'tmp'`` it overrides the default ``/tmp`` base directory.
-    log_file
-        Optional log file path. When omitted, defaults to ``storage_root/optimization.log`` if
-        ``storage_root`` is provided, otherwise a timestamped file in the current working directory.
+    The engine transforms φ-space parameters into θ-space values, renders FEBio input
+    files, launches the simulations, and assembles residuals for the optimiser. It also
+    keeps track of iteration artefacts and performs optional cleanup when the run ends.
     """
 
     def __init__(
@@ -122,6 +82,7 @@ class Engine:
         storage_root: str | Path | None = None,
         log_file: str | Path | None = None,
     ) -> None:
+        """Initialise the optimisation engine and supporting services."""
         if not cases:
             raise ValueError("At least one SimulationCase is required.")
 
@@ -229,7 +190,17 @@ class Engine:
         verbose: bool = True,
         callbacks: Iterable[Callable[[Array, float], None]] | None = None,
     ) -> OptimizeResult:
-        """Execute the optimisation and return the fitted parameters."""
+        """Execute the optimisation and return the fitted parameters.
+
+        Args:
+            phi0: Initial guess in φ-space. Defaults to zeros if omitted.
+            bounds: Bounds in φ-space supplied to the optimiser.
+            verbose: Enable progress logging and tabular summaries.
+            callbacks: Extra callbacks invoked every iteration with φ and cost.
+
+        Returns:
+            Optimisation result containing φ, θ, and optimiser metadata.
+        """
 
         interrupted = False
         try:
@@ -294,7 +265,7 @@ class Engine:
                 self.close()
 
     def close(self) -> None:
-        """Shut down any background workers."""
+        """Shut down background workers and release runner resources."""
         try:
             self.runner.shutdown()
         except Exception:
@@ -306,6 +277,7 @@ class Engine:
         name: str,
         options: Dict[str, Any] | None,
     ) -> OptimizerAdapter:
+        """Create an optimiser adapter based on the supplied selector."""
         opts = dict(options or {})
         key = name.lower()
         if key == "least_squares":
@@ -320,6 +292,7 @@ class Engine:
         log_file: str | Path | None,
         storage_root: str | Path | None,
     ) -> Path:
+        """Determine the log file path and prepare parent directories."""
         path: Path | None = None
         if log_file is not None:
             candidate = str(log_file).strip()
@@ -344,6 +317,7 @@ class Engine:
         return resolved
 
     def _progress_printer(self) -> Callable[[Array, float], None]:
+        """Return a callback that logs iteration summaries."""
         logger = self._logger
 
         def callback(phi_vec: Array, cost: float) -> None:
@@ -398,6 +372,7 @@ class Engine:
         return callback
 
     def _build_jacobian_wrapper(self) -> Callable[[Array], Array]:
+        """Wrap the Jacobian evaluator so it stays in sync with engine state."""
         names = list(self.parameter_space.names)
 
         def label_fn(idx: int) -> str | None:
@@ -437,6 +412,7 @@ class Engine:
         return jacobian
 
     def _theta_vec(self, phi_vec: Array) -> Array:
+        """Map φ values to constrained θ values using the parameter space."""
         phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
         theta_vec = self.parameter_space.theta_from_phi(phi_vec)
         theta_vec = self.parameter_space.clamp_theta(theta_vec)
@@ -448,6 +424,7 @@ class Engine:
         label: str | None = None,
         iter_dir: Path | None = None,
     ) -> Array:
+        """Evaluate residuals for a θ vector, allocating an iteration directory."""
         theta_vec = cast(Array, np.asarray(theta_vec, dtype=float))
         theta_vec = self.parameter_space.clamp_theta(theta_vec)
         theta_dict = self.parameter_space.unpack_vec(theta_vec.tolist())
@@ -455,12 +432,14 @@ class Engine:
         return self._execute_cases(theta_dict, target_dir, label)
 
     def _next_iter_dir(self) -> Path:
+        """Return the directory where the next evaluation writes artefacts."""
         self._eval_index += 1
         iter_dir = self.workdir / f"eval{self._eval_index}"
         iter_dir.mkdir(parents=True, exist_ok=True)
         return iter_dir
 
     def _evaluate_residual(self, phi_vec: Array) -> Array:
+        """Evaluate residuals for the given φ vector, reusing cached results when possible."""
         phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
         if (
             self._last_phi is not None
@@ -488,6 +467,7 @@ class Engine:
         iter_dir: Path,
         label: str | None,
     ) -> Array:
+        """Render FEB files, launch simulations, and assemble residuals."""
         theta_values = {k: float(v) for k, v in theta.items()}
         jobs: List[tuple[_CaseState, Path, RunHandle, str]] = []
         for state in self._cases:
@@ -577,6 +557,7 @@ class Engine:
         return cast(Array, np.concatenate(residuals))
 
     def _cleanup_previous_iterations(self) -> None:
+        """Remove artefacts from older iterations, keeping current and best runs."""
         if not self.cleanup_previous:
             return
         keep: Set[Path] = set()
@@ -594,6 +575,7 @@ class Engine:
         self._iter_dirs = retained
 
     def _final_cleanup(self, interrupted: bool = False) -> None:
+        """Apply final cleanup according to policy and storage mode."""
         if self.storage_mode == "tmp":
             self._persist_best()
             shutil.rmtree(self.workdir, ignore_errors=True)
@@ -620,6 +602,7 @@ class Engine:
             self._iter_dirs = []
 
     def _persist_best(self) -> None:
+        """Copy the best iteration directory to the persistent root."""
         best_dir = self._best_iter_dir or self._last_iter_dir
         if best_dir is None:
             return
@@ -632,6 +615,7 @@ class Engine:
         shutil.copytree(best_dir, dest, dirs_exist_ok=True)
 
     def _initMsg(self):
+        """Emit a small banner when the engine is constructed."""
         banner_lines = [
             " _       _            _____ _____ ____  _      ",
             "(_)_ __ | |_ ___ _ __|  ___| ____| __ )(_) ___  ",
@@ -647,6 +631,7 @@ class Engine:
         phi_vec: Array,
         theta: Mapping[str, float],
     ) -> None:
+        """Log a final summary table when optimisation completes."""
         table = PrettyTable()
         table.field_names = ["parameter", "phi", "theta"]
         phi_values = np.asarray(phi_vec, dtype=float).reshape(-1)

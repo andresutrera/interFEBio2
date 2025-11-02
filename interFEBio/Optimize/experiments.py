@@ -19,6 +19,7 @@ class ExperimentSeries:
     weight: WeightFunction | None = None
 
     def weighted(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Return experimental data together with optional weights."""
         if self.weight is None:
             return self.x, self.y, None
         weights = self.weight(self.x)

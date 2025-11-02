@@ -33,6 +33,7 @@ class JobView:
     meta: Dict[str, object] = field(default_factory=dict)
 
     def clone(self) -> "JobView":
+        """Return a shallow clone that can be safely mutated by callers."""
         return replace(
             self,
             job_dir=Path(self.job_dir),
@@ -55,25 +56,32 @@ class MonitorFSView:
 
     # --- registration & snapshots ---
     def register(self, job: JobView) -> None:
+        """Register a single job view."""
         with self._lock:
             self._jobs[job.key] = job
 
     def register_many(self, jobs: Iterable[JobView]) -> None:
+        """Register multiple job views in one operation."""
         with self._lock:
             for job in jobs:
                 self._jobs[job.key] = job
 
     def get(self, key: str) -> Optional[JobView]:
+        """Return a cloned job view by key, or ``None`` if not registered."""
         with self._lock:
             job = self._jobs.get(key)
             return job.clone() if job else None
 
     def snapshot(self) -> List[JobView]:
+        """Return a cloned snapshot of all registered job views."""
         with self._lock:
             return [job.clone() for job in self._jobs.values()]
 
     # --- updates ---
-    def set_status(self, key: str, status: str, exit_code: Optional[int] = None) -> None:
+    def set_status(
+        self, key: str, status: str, exit_code: Optional[int] = None
+    ) -> None:
+        """Update status and optional exit code for the given job."""
         with self._lock:
             job = self._jobs.get(key)
             if not job:
@@ -84,6 +92,7 @@ class MonitorFSView:
             job.updated_at = time.time()
 
     def record_log_metadata(self, key: str, meta: Dict[str, object]) -> None:
+        """Merge log-derived metadata into the stored job view."""
         with self._lock:
             job = self._jobs.get(key)
             if not job:
@@ -98,7 +107,9 @@ class MonitorFSView:
                 ):
                     existing = job.meta.get(k)
                     val_int = int(value)
-                    if not isinstance(existing, (int, float)) or val_int >= int(existing):
+                    if not isinstance(existing, (int, float)) or val_int >= int(
+                        existing
+                    ):
                         job.meta[k] = val_int
                 else:
                     job.meta[k] = value
@@ -106,7 +117,9 @@ class MonitorFSView:
             if "time" not in job.meta:
                 step = job.meta.get("step")
                 step_size = job.meta.get("step_size")
-                if isinstance(step, (int, float)) and isinstance(step_size, (int, float)):
+                if isinstance(step, (int, float)) and isinstance(
+                    step_size, (int, float)
+                ):
                     job.meta["time"] = float(step) * float(step_size)
             job.updated_at = time.time()
 
@@ -143,6 +156,7 @@ def _extract_progress(line: str) -> Dict[str, object]:
 
 
 def _extract_config(line: str) -> Dict[str, object]:
+    """Extract static configuration hints from header log lines."""
     info: Dict[str, object] = {}
     if match := _TIME_STEPS_RE.search(line):
         try:
@@ -160,9 +174,7 @@ def _extract_config(line: str) -> Dict[str, object]:
 
 
 class LogTailer:
-    """
-    Incremental reader for text logs. Designed for low-footprint polling.
-    """
+    """Incremental log reader used by the monitoring utilities."""
 
     def __init__(
         self,
@@ -171,6 +183,7 @@ class LogTailer:
         encoding: str = "utf-8",
         chunk_size: int = 1 << 14,
     ):
+        """Initialise the tailer with the target log path."""
         self.path = Path(path)
         self.encoding = encoding
         self.chunk_size = chunk_size
@@ -180,6 +193,7 @@ class LogTailer:
         self._lock = threading.Lock()
 
     def reset(self) -> None:
+        """Reset internal offsets so polling restarts from the beginning."""
         with self._lock:
             self._offset = 0
             self._buffer = ""
@@ -236,17 +250,16 @@ class LogTailer:
 
 
 class XpltProbe:
-    """
-    Lightweight state tracker for .xplt files. Avoids loading the binary file
-    repeatedly by only watching size and mtime changes.
-    """
+    """Lightweight state tracker for ``.xplt`` files."""
 
     def __init__(self, path: Path):
+        """Initialise the probe for the supplied file path."""
         self.path = Path(path)
         self._last_size = -1
         self._last_mtime = -1.0
 
     def poll(self) -> Optional[Dict[str, float]]:
+        """Return file metadata when the file changes, otherwise ``None``."""
         try:
             stat = self.path.stat()
         except FileNotFoundError:
@@ -261,11 +274,7 @@ class XpltProbe:
 
 
 class ProgressAggregator:
-    """
-    Background worker that tails logs, updates job views, and optionally prints
-    concise status tables. Designed to be instantiated once per optimization
-    run and shared with future UI components.
-    """
+    """Background worker that tails logs and aggregates job status."""
 
     def __init__(
         self,
@@ -289,6 +298,7 @@ class ProgressAggregator:
         self._emitter = event_emitter or NullEventEmitter()
 
     def register_jobs(self, keys: Iterable[str]) -> None:
+        """Attach log tailers for the supplied job keys."""
         for key in keys:
             job = self.view.get(key)
             if not job:
@@ -298,6 +308,7 @@ class ProgressAggregator:
         self._mark_dirty()
 
     def start(self) -> None:
+        """Start the background polling thread if it is not already running."""
         if self._thread is not None:
             return
         if not self._tailers:
@@ -309,6 +320,7 @@ class ProgressAggregator:
         self._thread.start()
 
     def stop(self, force_render: bool = True) -> None:
+        """Stop the background thread and optionally emit a final snapshot."""
         if self._thread is None:
             return
         self._stop_event.set()
@@ -326,11 +338,13 @@ class ProgressAggregator:
     def update_status(
         self, key: str, status: str, exit_code: Optional[int] = None
     ) -> None:
+        """Forward status changes to the view and emit monitoring events."""
         self.view.set_status(key, status, exit_code)
         self._mark_dirty()
         self._emitter.emit(key, "status", {"status": status, "exit_code": exit_code})
 
     def register_tail(self, key: str) -> None:
+        """Attach a tailer for a job that started after initial registration."""
         job = self.view.get(key)
         if not job:
             return
@@ -400,7 +414,10 @@ class ProgressAggregator:
                         self._emitter.emit(
                             key,
                             "status",
-                            {"status": "finished", "time": job_snapshot.meta.get("time")},
+                            {
+                                "status": "finished",
+                                "time": job_snapshot.meta.get("time"),
+                            },
                         )
         return dirty
 
@@ -467,9 +484,7 @@ class ProgressAggregator:
         snapshot = sorted(self.view.snapshot(), key=lambda j: j.key)
         lines = []
         for job in snapshot:
-            exit_fragment = (
-                "" if job.exit_code is None else f" exit={job.exit_code}"
-            )
+            exit_fragment = "" if job.exit_code is None else f" exit={job.exit_code}"
             timestamp = time.strftime("%H:%M:%S", time.localtime(job.updated_at))
             progress_tokens: List[str] = []
             if (t := job.meta.get("time")) is not None:

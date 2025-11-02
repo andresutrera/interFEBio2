@@ -36,9 +36,7 @@ class SimulationCase:
         """Initialise helper objects and validate experiment coverage."""
         missing = set(self.experiments.keys()) - set(self.adapters.keys())
         if missing:
-            raise ValueError(
-                f"Missing adapters for experiments: {sorted(missing)}"
-            )
+            raise ValueError(f"Missing adapters for experiments: {sorted(missing)}")
         if self.omp_threads is not None:
             threads = int(self.omp_threads)
             if threads <= 0:
@@ -89,7 +87,11 @@ class SimulationCase:
         return results
 
     def environment(self) -> Dict[str, str]:
-        """Return environment overrides for this simulation."""
+        """Return environment overrides for this simulation.
+
+        Returns:
+            Mapping with per-case environment definitions.
+        """
         env: Dict[str, str] = {}
         if self.omp_threads is not None:
             env["OMP_NUM_THREADS"] = str(self.omp_threads)

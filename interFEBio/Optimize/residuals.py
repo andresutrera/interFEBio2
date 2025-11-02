@@ -35,6 +35,7 @@ class ResidualAssembler:
     weight_fn: WeightFunction | None = None
 
     def __post_init__(self) -> None:
+        """Ensure an aligner instance is available."""
         if self.aligner is None:
             self.aligner = Aligner()
 
@@ -43,6 +44,7 @@ class ResidualAssembler:
         experiments: Dict[str, tuple[Array, Array, Array | None]],
         simulations: Dict[str, tuple[Array, Array]],
     ) -> tuple[Array, Dict[str, slice]]:
+        """Return concatenated residuals and slice metadata."""
         residuals, slices, _ = self.assemble_with_details(experiments, simulations)
         return residuals, slices
 
@@ -51,6 +53,7 @@ class ResidualAssembler:
         experiments: Dict[str, tuple[Array, Array, Array | None]],
         simulations: Dict[str, tuple[Array, Array]],
     ) -> tuple[Array, Dict[str, slice], Dict[str, Dict[str, Array | None]]]:
+        """Return residuals together with per-experiment alignment details."""
         residuals: List[Array] = []
         slices: Dict[str, slice] = {}
         details: Dict[str, Dict[str, Array | None]] = {}
@@ -70,9 +73,7 @@ class ResidualAssembler:
 
             if weight is not None:
                 if weight.shape != res.shape:
-                    interpolated = np.interp(
-                        target, x_exp, weight, left=1.0, right=1.0
-                    )
+                    interpolated = np.interp(target, x_exp, weight, left=1.0, right=1.0)
                     weights_applied = cast(Array, np.asarray(interpolated, dtype=float))
                 else:
                     weights_applied = cast(Array, np.asarray(weight, dtype=float))
