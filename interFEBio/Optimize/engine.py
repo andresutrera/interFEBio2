@@ -6,23 +6,14 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Sequence,
-    Set,
-    cast,
-)
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence, Set, cast
 
 import numpy as np
 from numpy.typing import NDArray
 from prettytable import PrettyTable
 
 from ..Log import Log
+from ..monitoring.client import MonitorConfig, OptimizationMonitorClient
 from .alignment import Aligner, EvaluationGrid, GridPolicy
 from .cases import SimulationCase
 from .jacobian import JacobianComputer
@@ -80,6 +71,9 @@ class Engine:
         storage_mode: str = "disk",
         storage_root: str | Path | None = None,
         log_file: str | Path | None = None,
+        monitor: bool = True,
+        monitor_socket: str | Path | None = None,
+        monitor_label: str | None = None,
     ) -> None:
         """Initialise the optimisation engine and supporting services."""
         if not cases:
@@ -142,6 +136,7 @@ class Engine:
         self._logger = log_instance.logger
         self._initMsg()
 
+        self._runner_jobs = int(max(1, runner_jobs))
         runner_command = tuple(runner_command or ("febio4", "-i"))
         if runner_jobs <= 1:
             self.runner: Runner = LocalSerialRunner(
@@ -149,7 +144,7 @@ class Engine:
             )
         else:
             self.runner = LocalParallelRunner(
-                n_jobs=runner_jobs,
+                n_jobs=self._runner_jobs,
                 command=runner_command,
                 env=runner_env,
             )
@@ -179,6 +174,12 @@ class Engine:
         self._last_residual: Array | None = None
         self._last_iter_dir: Path | None = None
         self._last_metrics: Dict[str, Any] = {}
+        self._monitor_enabled = bool(monitor)
+        self._monitor_socket = (
+            Path(monitor_socket).expanduser() if monitor_socket else None
+        )
+        self._monitor_label = monitor_label
+        self._monitor_client: OptimizationMonitorClient | None = None
 
     # ------------------------------------------------------------------ public API
     def run(
@@ -202,6 +203,8 @@ class Engine:
         """
 
         interrupted = False
+        monitor_client = self._prepare_monitor_client()
+        self._monitor_client = monitor_client
         try:
             self._progress_index = 0
             self._eval_index = 0
@@ -223,6 +226,11 @@ class Engine:
             bounds_input = (
                 bounds if bounds is not None else self.parameter_space.phi_bounds()
             )
+            if monitor_client is not None:
+                try:
+                    self._emit_monitor_start(monitor_client, phi0_vec, bounds_input)
+                except Exception:
+                    self._logger.exception("Failed to emit monitor run start event.")
 
             callback_list: List[Callable[[Array, float], None]] = list(callbacks or [])
             if verbose:
@@ -249,6 +257,15 @@ class Engine:
             theta_opt_vec = self.parameter_space.clamp_theta(theta_opt_vec)
             theta_opt = self.parameter_space.unpack_vec(theta_opt_vec.tolist())
             self._log_final_summary(phi_opt_array, theta_opt)
+            if monitor_client is not None:
+                try:
+                    summary = self._build_run_summary(theta_opt, meta)
+                    monitor_client.run_completed(
+                        best_cost=self._best_cost,
+                        summary=summary,
+                    )
+                except Exception:
+                    self._logger.exception("Failed to emit monitor completion event.")
             return OptimizeResult(
                 phi=phi_opt_array,
                 theta=theta_opt,
@@ -256,11 +273,26 @@ class Engine:
             )
         except KeyboardInterrupt:
             interrupted = True
+            if monitor_client is not None:
+                try:
+                    monitor_client.run_failed(reason="interrupted")
+                except Exception:
+                    self._logger.exception("Failed to emit monitor interruption event.")
+            raise
+        except Exception as exc:
+            if monitor_client is not None:
+                try:
+                    monitor_client.run_failed(
+                        reason=f"{exc.__class__.__name__}: {exc}"
+                    )
+                except Exception:
+                    self._logger.exception("Failed to emit monitor failure event.")
             raise
         finally:
             try:
                 self._final_cleanup(interrupted=interrupted)
             finally:
+                self._monitor_client = None
                 self.close()
 
     def close(self) -> None:
@@ -269,6 +301,149 @@ class Engine:
             self.runner.shutdown()
         except Exception:
             pass
+        self._monitor_client = None
+
+    # ------------------------------------------------------------------ monitoring helpers
+    def _prepare_monitor_client(self) -> OptimizationMonitorClient | None:
+        if not self._monitor_enabled:
+            return None
+        try:
+            config = MonitorConfig(
+                socket_path=self._monitor_socket,
+                label=self._monitor_label or self._default_monitor_label(),
+            )
+            return OptimizationMonitorClient(config)
+        except Exception:
+            self._logger.exception(
+                "Monitor initialisation failed; disabling monitoring."
+            )
+            return None
+
+    def _default_monitor_label(self) -> str:
+        for candidate in (self.persist_root.name, self.workdir.name):
+            if candidate:
+                return candidate
+        return datetime.now().strftime("run-%Y%m%d%H%M%S")
+
+    def _emit_monitor_start(
+        self,
+        monitor: OptimizationMonitorClient,
+        phi0_vec: Array,
+        bounds: tuple[Array, Array] | Sequence[tuple[float, float]] | None,
+    ) -> None:
+        theta0_vec = self.parameter_space.theta_from_phi(phi0_vec)
+        parameters: Dict[str, Any] = {
+            "names": list(self.parameter_space.names),
+            "phi0": [float(x) for x in np.asarray(phi0_vec, dtype=float)],
+            "theta0": [float(x) for x in np.asarray(theta0_vec, dtype=float)],
+        }
+        bounds_payload = self._serialise_bounds(bounds)
+        if bounds_payload is not None:
+            parameters["bounds"] = bounds_payload
+        cases = self._case_descriptors()
+        optimizer_meta = {"adapter": type(self.optimizer_adapter).__name__}
+        meta = {
+            "storage_root": str(self.persist_root),
+            "runner_jobs": getattr(self, "_runner_jobs", None),
+        }
+        monitor.run_started(
+            parameters=parameters,
+            cases=cases,
+            optimizer=optimizer_meta,
+            meta={k: v for k, v in meta.items() if v is not None},
+        )
+
+    def _case_descriptors(self) -> List[Dict[str, Any]]:
+        descriptors: List[Dict[str, Any]] = []
+        for state in self._cases:
+            experiments = sorted(state.case.experiments.keys())
+            entry: Dict[str, Any] = {
+                "subfolder": state.case.subfolder,
+                "experiments": experiments,
+            }
+            omp_threads = state.case.omp_threads
+            if omp_threads is not None:
+                entry["omp_threads"] = int(omp_threads)
+            descriptors.append(entry)
+        return descriptors
+
+    def _serialise_bounds(
+        self, bounds: tuple[Array, Array] | Sequence[tuple[float, float]] | None
+    ) -> List[tuple[float, float]] | None:
+        if bounds is None:
+            return None
+        if isinstance(bounds, tuple) and len(bounds) == 2:
+            lo, hi = bounds
+            lo = np.asarray(lo, dtype=float).reshape(-1)
+            hi = np.asarray(hi, dtype=float).reshape(-1)
+            return list(zip(lo.tolist(), hi.tolist()))
+        serialised: List[tuple[float, float]] = []
+        for pair in bounds:
+            try:
+                lo, hi = pair
+            except Exception:
+                continue
+            serialised.append((float(lo), float(hi)))
+        return serialised
+
+    def _sanitize_metrics(self, metrics: Mapping[str, Any]) -> Dict[str, Any]:
+        clean: Dict[str, Any] = {}
+        nrmse = metrics.get("nrmse")
+        if isinstance(nrmse, (int, float)) and np.isfinite(nrmse):
+            clean["nrmse"] = float(nrmse)
+        r_squared = metrics.get("r_squared")
+        if isinstance(r_squared, Mapping):
+            clean["r_squared"] = {
+                key: (
+                    float(value)
+                    if isinstance(value, (int, float)) and np.isfinite(value)
+                    else None
+                )
+                for key, value in r_squared.items()
+            }
+        return clean
+
+    def _simplify_meta(self, data: Mapping[str, Any]) -> Dict[str, Any]:
+        return {str(key): self._simplify_value(value) for key, value in data.items()}
+
+    def _simplify_value(self, value: Any) -> Any:
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            return value
+        if isinstance(value, Mapping):
+            limited_items = list(value.items())[:16]
+            return {str(k): self._simplify_value(v) for k, v in limited_items}
+        if isinstance(value, (list, tuple, set)):
+            limited = list(value)[:16]
+            return [self._simplify_value(item) for item in limited]
+        if hasattr(value, "tolist"):
+            arr = np.asarray(value)
+            if arr.ndim == 0:
+                scalar = arr.item()
+                return (
+                    float(scalar)
+                    if isinstance(scalar, (int, float))
+                    else self._simplify_value(scalar)
+                )
+            flat = arr.reshape(-1)
+            limited = flat[:16]
+            return [float(x) for x in limited.tolist()]
+        return str(value)
+
+    def _build_run_summary(
+        self,
+        theta_opt: Mapping[str, float],
+        optimizer_meta: Mapping[str, Any],
+    ) -> Dict[str, Any]:
+        summary: Dict[str, Any] = {
+            "theta_opt": {name: float(val) for name, val in theta_opt.items()}
+        }
+        metrics = self._sanitize_metrics(self._last_metrics or {})
+        if metrics:
+            summary.update(metrics)
+        final_meta = self._simplify_meta(dict(optimizer_meta or {}))
+        if final_meta:
+            summary["optimizer"] = final_meta
+        return summary
 
     # ------------------------------------------------------------------ internals
     def _build_optimizer(
@@ -323,14 +498,17 @@ class Engine:
             theta_vec = self.parameter_space.theta_from_phi(phi_vec)
             table = PrettyTable()
             table.field_names = ["parameter", "phi", "theta"]
+            theta_dict: Dict[str, float] = {}
             for name, phi_value, theta_value in zip(
                 self.parameter_space.names, phi_vec, theta_vec, strict=True
             ):
+                theta_float = float(theta_value)
+                theta_dict[name] = theta_float
                 table.add_row(
                     [
                         name,
                         f"{float(phi_value):.6e}",
-                        f"{float(theta_value):.6e}",
+                        f"{theta_float:.6e}",
                     ]
                 )
             metrics = self._last_metrics or {}
@@ -361,6 +539,17 @@ class Engine:
                 param_table=param_table,
                 rsq_table=rsq_table_str,
             )
+            if self._monitor_client is not None:
+                try:
+                    payload_metrics = self._sanitize_metrics(metrics)
+                    self._monitor_client.record_iteration(
+                        index=self._progress_index,
+                        cost=float(cost),
+                        theta=theta_dict,
+                        metrics=payload_metrics,
+                    )
+                except Exception:
+                    self._logger.exception("Failed to emit monitor iteration event.")
             self._progress_index += 1
             if self._last_iter_dir is not None:
                 if self._best_cost is None or cost <= self._best_cost:

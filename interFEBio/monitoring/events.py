@@ -7,9 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
-from .state import StorageInventory
+from typing import Optional, Protocol
 
 
 @dataclass
@@ -65,10 +63,16 @@ def create_event_emitter(socket_path: Optional[Path]) -> EventEmitter:
     return NullEventEmitter()
 
 
+class EventConsumer(Protocol):
+    def apply_event(
+        self, job_id: str, event: str, payload: dict, ts: float
+    ) -> None: ...
+
+
 class EventSocketListener:
-    def __init__(self, socket_path: Path, inventory: StorageInventory):
+    def __init__(self, socket_path: Path, consumer: EventConsumer):
         self.socket_path = Path(socket_path)
-        self.inventory = inventory
+        self.consumer = consumer
         self._server: Optional[socket.socket] = None
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -149,7 +153,7 @@ class EventSocketListener:
                     if not job_id or not event:
                         continue
                     if isinstance(payload, dict):
-                        self.inventory.apply_event(job_id, event, payload, ts)
+                        self.consumer.apply_event(job_id, event, payload, ts)
 
 
 __all__ = [
@@ -158,4 +162,5 @@ __all__ = [
     "SocketEventEmitter",
     "create_event_emitter",
     "EventSocketListener",
+    "EventConsumer",
 ]

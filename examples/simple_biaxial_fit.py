@@ -78,6 +78,7 @@ def main() -> None:
         runner_command=FEBIO_COMMAND,
         storage_mode="tmp",
         storage_root=WORK_ROOT,
+        monitor=False,
     )
 
     result = engine.run()
