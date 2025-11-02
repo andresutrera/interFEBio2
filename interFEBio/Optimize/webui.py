@@ -185,9 +185,7 @@ class MonitorWebUIServer:
   </script>
 </body>
 </html>
-""".format(
-                    refresh_ms=refresh_ms, initial_json=initial_json
-                )
+""".format(refresh_ms=refresh_ms, initial_json=initial_json)
 
             def log_message(self, format: str, *args: object) -> None:  # type: ignore[override]
                 return
