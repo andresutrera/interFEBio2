@@ -422,7 +422,7 @@ class ProgressAggregator:
         return dirty
 
     def _backfill_progress(self) -> None:
-        for key, tailer in self._tailers.items():
+        for key, _tailer in self._tailers.items():
             job = self.view.get(key)
             if not job:
                 continue

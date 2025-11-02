@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
+from typing import Callable, Dict, Iterable, List, Mapping, Sequence, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -189,7 +189,10 @@ class ParameterSpace:
 
     def unpack_vec(self, v: Sequence[float]) -> Dict[str, float]:
         """Convert a vector into a parameter dictionary."""
-        return {k: float(x) for k, x in zip(self._names, np.asarray(v, dtype=float))}
+        return {
+            k: float(x)
+            for k, x in zip(self._names, np.asarray(v, dtype=float), strict=True)
+        }
 
     # ---------- Jacobian / gradient transforms ----------
     # J_theta: (m, n) = ∂r/∂theta ; returns ∂r/∂phi
