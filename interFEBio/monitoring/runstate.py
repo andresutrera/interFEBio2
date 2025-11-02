@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -12,6 +12,7 @@ class IterationRecord:
     theta: Dict[str, float]
     metrics: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    series: Optional[Dict[str, Dict[str, List[float]]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         payload = asdict(self)
@@ -51,6 +52,7 @@ class OptimizationRun:
                 theta=dict(item.get("theta", {})),
                 metrics=dict(item.get("metrics", {})),
                 timestamp=float(item.get("timestamp", time.time())),
+                series=_sanitize_series_payload(item.get("series")),
             )
             for item in payload.get("iterations", [])
         ]
@@ -101,22 +103,35 @@ class OptimizationRun:
                         )
                         for subkey, subval in value.items()
                     }
+                elif isinstance(value, (list, tuple)):
+                    try:
+                        metrics_clean[key] = [float(v) for v in value]
+                    except Exception:
+                        metrics_clean[key] = [str(v) for v in value]
             if metrics_clean:
                 metrics = metrics_clean
             else:
                 metrics = {}
+            series_clean = _sanitize_series_payload(payload.get("series"))
             record = IterationRecord(
                 index=index,
                 cost=cost,
                 theta={k: float(v) for k, v in theta.items() if _is_number(v)},
                 metrics=metrics,
                 timestamp=float(payload.get("timestamp", ts)),
+                series=series_clean or None,
             )
             self.iterations.append(record)
             best = self.meta.get("best_cost")
             if best is None or cost <= best:
                 self.meta["best_cost"] = cost
             self.meta["last_cost"] = cost
+            r_sq = metrics.get("r_squared")
+            if isinstance(r_sq, dict):
+                dest = self.meta.setdefault("r_squared", {})
+                if isinstance(dest, dict):
+                    for name, value in r_sq.items():
+                        dest[str(name)] = value
         elif event == "run_completed":
             self.status = "finished"
             summary = payload.get("summary")
@@ -145,6 +160,27 @@ class OptimizationRun:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float))
+
+
+def _sanitize_series_payload(raw: Any) -> Dict[str, Dict[str, List[float]]]:
+    cleaned: Dict[str, Dict[str, List[float]]] = {}
+    if not isinstance(raw, dict):
+        return cleaned
+    for key, value in raw.items():
+        if not isinstance(value, dict):
+            continue
+        entry: Dict[str, List[float]] = {}
+        for field in ("x", "y_exp", "y_sim"):
+            arr = value.get(field)
+            if arr is None:
+                continue
+            try:
+                entry[field] = [float(v) for v in arr]
+            except Exception:
+                continue
+        if entry:
+            cleaned[str(key)] = entry
+    return cleaned
 
 
 __all__ = ["IterationRecord", "OptimizationRun"]

@@ -14,6 +14,30 @@ def _slug(value: str) -> str:
     return "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_")).strip("_") or "run"
 
 
+def _sanitize_series(
+    series: Mapping[str, Mapping[str, Any]] | None
+) -> Dict[str, Dict[str, list[float]]]:
+    cleaned: Dict[str, Dict[str, list[float]]] = {}
+    if not series:
+        return cleaned
+    for key, data in series.items():
+        entry: Dict[str, list[float]] = {}
+        if not isinstance(data, Mapping):
+            continue
+        for field in ("x", "y_exp", "y_sim"):
+            values = data.get(field)
+            if values is None:
+                continue
+            try:
+                numeric = [float(v) for v in values]
+            except Exception:
+                continue
+            entry[field] = numeric
+        if entry:
+            cleaned[str(key)] = entry
+    return cleaned
+
+
 def generate_run_id(label: str | None = None) -> str:
     prefix = _slug(label or "run")
     suffix = uuid.uuid4().hex[:12]
@@ -69,6 +93,7 @@ class OptimizationMonitorClient:
         cost: float,
         theta: Mapping[str, float],
         metrics: Mapping[str, Any] | None = None,
+        series: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         payload: Dict[str, Any] = {
             "index": int(index),
@@ -77,6 +102,9 @@ class OptimizationMonitorClient:
             "metrics": dict(metrics or {}),
             "timestamp": time.time(),
         }
+        series_payload = _sanitize_series(series)
+        if series_payload:
+            payload["series"] = series_payload
         self._emit("iteration", payload)
 
     def run_completed(

@@ -58,7 +58,7 @@ def main() -> None:
     exp_series = ExperimentSeries(x=exp_data[:, 0], y=exp_data[:, 1])
 
     parameter_space = ParameterSpace(xi=2.0)
-    parameter_space.add_parameter(name="G", theta0=0.02, bounds=(0.001, 0.08))
+    parameter_space.add_parameter(name="G", theta0=0.5)
     case = build_case(exp_series)
 
     engine = Engine(
@@ -66,11 +66,11 @@ def main() -> None:
         cases=[case],
         grid_policy="sim_to_exp",
         use_jacobian=True,
-        jacobian_perturbation=1e-6,
+        jacobian_perturbation=1e-4,
         optimizer="least_squares",
         optimizer_options={
-            "ftol": 1e-3,
-            "xtol": 1e-3,
+            "ftol": 1e-6,
+            "xtol": 1e-6,
         },
         cleanup_mode="retain_best",
         cleanup_previous=True,
@@ -78,7 +78,7 @@ def main() -> None:
         runner_command=FEBIO_COMMAND,
         storage_mode="tmp",
         storage_root=WORK_ROOT,
-        monitor=False,
+        monitor=True,
     )
 
     result = engine.run()

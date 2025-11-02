@@ -30,6 +30,11 @@ from .Storage import StorageManager
 Array = NDArray[np.float64]
 
 
+def _to_list(data: Any) -> List[float]:
+    array = np.asarray(data, dtype=float).reshape(-1)
+    return array.tolist()
+
+
 @dataclass
 class OptimizeResult:
     phi: Array
@@ -180,6 +185,7 @@ class Engine:
         )
         self._monitor_label = monitor_label
         self._monitor_client: OptimizationMonitorClient | None = None
+        self._series_latest: Dict[str, Dict[str, Any]] = {}
 
     # ------------------------------------------------------------------ public API
     def run(
@@ -266,6 +272,10 @@ class Engine:
                     )
                 except Exception:
                     self._logger.exception("Failed to emit monitor completion event.")
+            try:
+                self._write_series_outputs()
+            except Exception:
+                self._logger.exception("Failed to write series outputs.")
             return OptimizeResult(
                 phi=phi_opt_array,
                 theta=theta_opt,
@@ -445,6 +455,29 @@ class Engine:
             summary["optimizer"] = final_meta
         return summary
 
+    def _write_series_outputs(self) -> None:
+        if not self._series_latest:
+            return
+        target_dir = self._log_file.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for key, payload in self._series_latest.items():
+            x_vals = payload.get("x")
+            exp_vals = payload.get("y_exp")
+            sim_vals = payload.get("y_sim")
+            if not (x_vals and exp_vals and sim_vals):
+                continue
+            length = min(len(x_vals), len(exp_vals), len(sim_vals))
+            if length == 0:
+                continue
+            safe_name = key.replace("/", "_")
+            path = target_dir / f"{safe_name}_series.txt"
+            lines = [f"# {key}\n", "# x y_exp y_sim\n"]
+            for idx in range(length):
+                lines.append(
+                    f"{x_vals[idx]:.10g} {exp_vals[idx]:.10g} {sim_vals[idx]:.10g}\n"
+                )
+            path.write_text("".join(lines), encoding="utf-8")
+
     # ------------------------------------------------------------------ internals
     def _build_optimizer(
         self,
@@ -547,6 +580,7 @@ class Engine:
                         cost=float(cost),
                         theta=theta_dict,
                         metrics=payload_metrics,
+                        series=self._series_latest,
                     )
                 except Exception:
                     self._logger.exception("Failed to emit monitor iteration event.")
@@ -641,6 +675,7 @@ class Engine:
         iter_dir = self._next_iter_dir()
         self._iter_dirs.append(iter_dir)
         label = "_base" if self.jacobian is not None else ""
+        self._series_latest = {}
         residual = self._execute_cases(theta_dict, iter_dir, label)
         self._last_phi = phi_vec.copy()
         self._last_theta_vec = theta_vec
@@ -724,6 +759,18 @@ class Engine:
                     r2 = 1.0 if ss_res == 0.0 else float("nan")
                 key = f"{case_name}/{exp_name}"
                 r_squared[key] = r2
+                try:
+                    grid_vals = info.get("grid")
+                    y_exp_vals = info.get("y_exp")
+                    y_sim_vals = info.get("y_sim")
+                    if grid_vals is not None and y_exp_vals is not None and y_sim_vals is not None:
+                        self._series_latest[key] = {
+                            "x": _to_list(grid_vals),
+                            "y_exp": _to_list(y_exp_vals),
+                            "y_sim": _to_list(y_sim_vals),
+                        }
+                except Exception:
+                    pass
 
         nrmse = float("nan")
         if all_exp and all_sim:

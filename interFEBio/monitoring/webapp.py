@@ -203,6 +203,13 @@ def create_app(
                       <h3>Cost per iteration</h3>
                       <svg id="costChart" class="chart" viewBox="0 0 600 220" preserveAspectRatio="none"></svg>
                     </div>
+                    <div class="chart-wrapper">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Experiment vs Simulation</h3>
+                        <select id="seriesSelect" style="background:#151f34; color:#f5f5f5; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0.35rem 0.6rem; font-size:0.9rem;"></select>
+                      </div>
+                      <svg id="seriesChart" class="chart" viewBox="0 0 600 220" preserveAspectRatio="none"></svg>
+                    </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.1rem;">
                       <h3 style="font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75; margin:0;">Raw JSON</h3>
                       <button id="toggleJson" style="margin-right:0; background:rgba(255,255,255,0.08); padding:0.3rem 0.8rem;">Expand</button>
@@ -219,9 +226,15 @@ def create_app(
                   const chartSvg = document.getElementById('costChart');
                   const closeDetailBtn = document.getElementById('closeDetail');
                   const toggleJsonBtn = document.getElementById('toggleJson');
+                  const seriesSelect = document.getElementById('seriesSelect');
+                  const seriesSvg = document.getElementById('seriesChart');
                   let jsonExpanded = false;
                   let selectedRunId = null;
                   let lastTableHtml = '';
+                  let currentSeriesData = {};
+                  if (seriesSelect) {
+                    seriesSelect.disabled = true;
+                  }
 
                   async function loadRuns(showLoading = true) {
                     if (showLoading && !lastTableHtml) {
@@ -302,6 +315,8 @@ def create_app(
                     detailTitle.textContent = data.label || data.run_id || selectedRunId || 'Run detail';
                     renderSummary(data);
                     renderCostChart(Array.isArray(data.iterations) ? data.iterations : []);
+                    const latestIteration = Array.isArray(data.iterations) && data.iterations.length ? data.iterations[data.iterations.length - 1] : null;
+                    renderSeries(latestIteration && latestIteration.series ? latestIteration.series : {});
                     const text = JSON.stringify(data, null, 2);
                     if (detailJson.textContent !== text) {
                       detailJson.textContent = text;
@@ -370,6 +385,22 @@ def create_app(
                     if (typeof meta.last_cost === 'number') {
                       summary.push({ label: 'Last cost', value: meta.last_cost.toExponential(4) });
                     }
+                    if (meta.r_squared && typeof meta.r_squared === 'object') {
+                      const entries = Object.entries(meta.r_squared)
+                        .map(([key, value]) => {
+                          if (value === null || value === undefined) {
+                            return `${key}: -`;
+                          }
+                          const num = Number(value);
+                          if (!Number.isFinite(num)) {
+                            return `${key}: -`;
+                          }
+                          return `${key}: ${num.toFixed(4)}`;
+                        });
+                      if (entries.length) {
+                        summary.push({ label: 'R²', value: entries.join('<br>') });
+                      }
+                    }
                     if (meta.optimizer) {
                       let label = meta.optimizer;
                       if (typeof meta.optimizer === 'object') {
@@ -436,11 +467,9 @@ def create_app(
                       label.setAttribute('text-anchor', 'end');
                       axis.appendChild(label);
                     }
-                    const xTicks = Math.min(iterations.length - 1, 5);
-                    for (let i = 0; i <= xTicks; i++) {
-                      const idx = Math.round((iterations.length - 1) * (i / Math.max(xTicks, 1)));
+                    for (let idx = 0; idx < iterations.length; idx++) {
                       const x = paddingLeft + (plotWidth * (idx / Math.max(iterations.length - 1, 1)));
-                      if (i > 0 && i < xTicks) {
+                      if (idx !== 0 && idx !== iterations.length - 1) {
                         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                         line.setAttribute('x1', x.toString());
                         line.setAttribute('y1', paddingTop.toString());
@@ -511,7 +540,7 @@ def create_app(
                     detailJson.style.overflowY = 'hidden';
                     detailJson.style.visibility = 'hidden';
                   }
-                  function closeDetail() {
+function closeDetail() {
                     detail.hidden = true;
                     detailJson.textContent = '';
                     detailSummary.innerHTML = '';
@@ -521,9 +550,197 @@ def create_app(
                     detailJson.style.overflowY = 'hidden';
                     detailJson.style.visibility = 'hidden';
                     selectedRunId = null;
+                    currentSeriesData = {};
+                    if (seriesSelect) {
+                      seriesSelect.innerHTML = '';
+                      seriesSelect.disabled = true;
+                    }
+                    if (seriesSvg) {
+                      seriesSvg.innerHTML = '';
+                    }
                     if (chartSvg) {
                       chartSvg.innerHTML = '';
                     }
+                  }
+                  function renderSeries(series) {
+                    currentSeriesData = series || {};
+                    if (!seriesSelect || !seriesSvg) {
+                      return;
+                    }
+                    const keys = Object.keys(currentSeriesData);
+                    if (!keys.length) {
+                      seriesSelect.innerHTML = '<option>No data</option>';
+                      seriesSelect.disabled = true;
+                      seriesSvg.innerHTML = "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='16'>No series data</text>";
+                      return;
+                    }
+                    seriesSelect.disabled = false;
+                    const desiredValue = (!seriesSelect.value || !currentSeriesData[seriesSelect.value]) ? keys[0] : seriesSelect.value;
+                    seriesSelect.innerHTML = keys
+                      .map(key => `<option value="${key}" ${key === desiredValue ? 'selected' : ''}>${key}</option>`)
+                      .join('');
+                    seriesSelect.value = desiredValue;
+                    renderSeriesChart(desiredValue);
+                  }
+                  function renderSeriesChart(key) {
+                    if (!seriesSvg) return;
+                    seriesSvg.innerHTML = '';
+                    const dataset = currentSeriesData && key ? currentSeriesData[key] : null;
+                    if (!dataset) {
+                      seriesSvg.innerHTML = "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='16'>No series data</text>";
+                      return;
+                    }
+                    const xVals = Array.isArray(dataset.x) ? dataset.x.map(Number) : [];
+                    const expVals = Array.isArray(dataset.y_exp) ? dataset.y_exp.map(Number) : [];
+                    const simVals = Array.isArray(dataset.y_sim) ? dataset.y_sim.map(Number) : [];
+                    const length = Math.min(xVals.length, expVals.length, simVals.length);
+                    if (!length) {
+                      seriesSvg.innerHTML = "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='rgba(255,255,255,0.4)' font-size='16'>No series data</text>";
+                      return;
+                    }
+                    const width = 600;
+                    const height = 220;
+                    seriesSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+                    const paddingLeft = 64;
+                    const paddingRight = 22;
+                    const paddingTop = 22;
+                    const paddingBottom = 54;
+                    const plotWidth = width - paddingLeft - paddingRight;
+                    const plotHeight = height - paddingTop - paddingBottom;
+                    const xMin = Math.min(...xVals);
+                    const xMax = Math.max(...xVals);
+                    const yMin = Math.min(...expVals, ...simVals);
+                    const yMax = Math.max(...expVals, ...simVals);
+                    const xSpread = xMax - xMin || 1;
+                    const ySpread = yMax - yMin || 1;
+                    const grid = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    grid.setAttribute('class', 'chart-grid');
+                    const axis = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    axis.setAttribute('class', 'chart-axis');
+                    const gridLines = 4;
+                    for (let i = 0; i <= gridLines; i++) {
+                      const y = paddingTop + (plotHeight / gridLines) * i;
+                      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                      line.setAttribute('x1', paddingLeft.toString());
+                      line.setAttribute('y1', y.toString());
+                      line.setAttribute('x2', (width - paddingRight).toString());
+                      line.setAttribute('y2', y.toString());
+                      grid.appendChild(line);
+                      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                      const value = yMax - (ySpread / gridLines) * i;
+                      label.textContent = value.toExponential(2);
+                      label.setAttribute('x', (paddingLeft - 8).toString());
+                      label.setAttribute('y', (y + 3).toString());
+                      label.setAttribute('text-anchor', 'end');
+                      axis.appendChild(label);
+                    }
+                    const tickCount = Math.max(1, Math.min(length - 1, 6));
+                    const tickIndices = [];
+                    for (let i = 0; i <= tickCount; i++) {
+                      const idx = Math.round((length - 1) * (i / tickCount));
+                      if (!tickIndices.includes(idx)) {
+                        tickIndices.push(idx);
+                      }
+                    }
+                    tickIndices.sort((a, b) => a - b);
+                    tickIndices.forEach((idx, arrIdx) => {
+                      const x = paddingLeft + ((xVals[idx] - xMin) / xSpread) * plotWidth;
+                      if (idx !== 0 && idx !== length - 1) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', x.toString());
+                        line.setAttribute('y1', paddingTop.toString());
+                        line.setAttribute('x2', x.toString());
+                        line.setAttribute('y2', (paddingTop + plotHeight).toString());
+                        line.setAttribute('stroke-dasharray', '2 4');
+                        grid.appendChild(line);
+                      }
+                      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                      label.textContent = xVals[idx].toExponential(2);
+                      label.setAttribute('x', x.toString());
+                      label.setAttribute('y', (height - paddingBottom + 26).toString());
+                      label.setAttribute('text-anchor', 'middle');
+                      label.setAttribute('dominant-baseline', 'middle');
+                      axis.appendChild(label);
+                    });
+                    const toPoint = (idx, seriesVals) => {
+                      const x = paddingLeft + ((xVals[idx] - xMin) / xSpread) * plotWidth;
+                      const y = paddingTop + plotHeight - ((seriesVals[idx] - yMin) / ySpread) * plotHeight;
+                      return `${x},${y}`;
+                    };
+                    const simLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                    simLine.setAttribute('fill', 'none');
+                    simLine.setAttribute('stroke', '#6ec1ff');
+                    simLine.setAttribute('stroke-width', '2.2');
+                    simLine.setAttribute('stroke-linejoin', 'round');
+                    simLine.setAttribute('stroke-linecap', 'round');
+                    simLine.setAttribute('points', simVals.map((_, idx) => toPoint(idx, simVals)).join(' '));
+                    const expGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    expVals.forEach((val, idx) => {
+                      const x = paddingLeft + ((xVals[idx] - xMin) / xSpread) * plotWidth;
+                      const y = paddingTop + plotHeight - ((val - yMin) / ySpread) * plotHeight;
+                      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                      dot.setAttribute('cx', x.toString());
+                      dot.setAttribute('cy', y.toString());
+                      dot.setAttribute('r', '3.2');
+                      dot.setAttribute('fill', '#ffb347');
+                      expGroup.appendChild(dot);
+                    });
+                    const legend = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    const legendY = paddingTop + 16;
+                    const legendX = paddingLeft + 6;
+                    const legendItems = [
+                      { label: 'Experimental', color: '#ffb347' },
+                      { label: 'Simulation', color: '#6ec1ff' },
+                    ];
+                    legendItems.forEach((item, idx) => {
+                      const y = legendY + idx * 16;
+                      if (idx === 0) {
+                        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        circle.setAttribute('cx', (legendX + 9).toString());
+                        circle.setAttribute('cy', y.toString());
+                        circle.setAttribute('r', '4');
+                        circle.setAttribute('fill', item.color);
+                        legend.appendChild(circle);
+                      } else {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', legendX.toString());
+                        line.setAttribute('y1', y.toString());
+                        line.setAttribute('x2', (legendX + 18).toString());
+                        line.setAttribute('y2', y.toString());
+                        line.setAttribute('stroke', item.color);
+                        line.setAttribute('stroke-width', '3');
+                        legend.appendChild(line);
+                      }
+                      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                      text.textContent = item.label;
+                      text.setAttribute('x', (legendX + 24).toString());
+                      text.setAttribute('y', (y + 3).toString());
+                      text.setAttribute('fill', 'rgba(255,255,255,0.7)');
+                      legend.appendChild(text);
+                    });
+                    const xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    xLabel.textContent = 'x';
+                    xLabel.setAttribute('x', (paddingLeft + plotWidth / 2).toString());
+                    xLabel.setAttribute('y', (height - 8).toString());
+                    xLabel.setAttribute('text-anchor', 'middle');
+                    xLabel.setAttribute('fill', 'rgba(255,255,255,0.6)');
+                    const yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    yLabel.textContent = 'y';
+                    yLabel.setAttribute('transform', `translate(14 ${paddingTop + plotHeight / 2}) rotate(-90)`);
+                    yLabel.setAttribute('text-anchor', 'middle');
+                    yLabel.setAttribute('fill', 'rgba(255,255,255,0.6)');
+                    seriesSvg.appendChild(grid);
+                    seriesSvg.appendChild(axis);
+                    seriesSvg.appendChild(expGroup);
+                    seriesSvg.appendChild(simLine);
+                    seriesSvg.appendChild(legend);
+                    seriesSvg.appendChild(xLabel);
+                    seriesSvg.appendChild(yLabel);
+                  }
+                  if (seriesSelect) {
+                    seriesSelect.addEventListener('change', (event) => {
+                      renderSeriesChart(event.target.value);
+                    });
                   }
                   rows.addEventListener('click', (event) => {
                     const target = event.target;
