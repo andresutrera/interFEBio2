@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-
 from interFEBio.Optimize.Parameters import ParameterSpace
 from interFEBio.Optimize.adapters import SimulationAdapter
 from interFEBio.Optimize.cases import SimulationCase
@@ -58,12 +57,8 @@ def main() -> None:
     exp_data = np.loadtxt(DATA_PATH)
     exp_series = ExperimentSeries(x=exp_data[:, 0], y=exp_data[:, 1])
 
-    parameter_space = ParameterSpace(
-        names=["G"],
-        theta0={"G": 0.5},
-        xi=2.0,
-    )
-
+    parameter_space = ParameterSpace(xi=2.0)
+    parameter_space.add_parameter(name="G", theta0=0.02, bounds=(0.001, 0.08))
     case = build_case(exp_series)
 
     engine = Engine(
@@ -86,8 +81,6 @@ def main() -> None:
     )
 
     result = engine.run()
-    print("Optimal phi:", result.phi)
-    print("Optimal theta:", result.theta)
 
 
 if __name__ == "__main__":

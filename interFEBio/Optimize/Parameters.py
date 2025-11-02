@@ -1,86 +1,168 @@
 # interFEBio/Optimize/parameters.py
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
 import math
 import numpy as np
+from numpy.typing import NDArray
 
-Array = np.ndarray
+Array = NDArray[np.float64]
+BoolArray = NDArray[np.bool_]
 
 
-@dataclass
+@dataclass(frozen=True)
+class Parameter:
+    """
+    Scalar optimisation parameter metadata.
+
+    Parameters
+    ----------
+    name
+        Identifier used in θ-space mappings and FEB templates.
+    theta0
+        Initial value in θ-space.
+    vary
+        When ``False`` the parameter is kept fixed during optimisation.
+    bounds
+        Optional lower/upper limits in θ-space.
+    """
+
+    name: str
+    theta0: float
+    vary: bool = True
+    bounds: tuple[float | None, float | None] = (None, None)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("Parameter name may not be empty.")
+        if not math.isfinite(self.theta0):
+            raise ValueError("theta0 must be finite.")
+        if self.bounds is None:
+            object.__setattr__(self, "bounds", (None, None))
+
+
 class ParameterSpace:
     """
-    Single reparam across all params:
-      theta_i = theta0_i * xi**phi_i
-      dtheta_i/dphi_i = theta_i * ln(xi)
+    Mapping between φ (optimiser space) and θ (physical parameters).
 
-    Optimizer works in phi-space. FEM uses theta-space.
+    Each parameter θ_i is related to its optimisation counterpart φ_i via::
+
+        θ_i = θ0_i * ξ**φ_i
+
+    where ξ is shared across parameters. The exponential reparameterisation keeps θ
+    positive while allowing unconstrained optimisation in φ-space.
+
+    Parameters can be provided all at once using the legacy constructor arguments
+    ``names``/``theta0`` or incrementally via :meth:`add_parameter`.
     """
 
-    names: List[str]
-    theta0: Dict[str, float]  # initial thetas per name
-    xi: float = 10.0  # shared base for all parameters
-    vary: Optional[Dict[str, bool]] = None
-    theta_bounds: Optional[Dict[str, Tuple[Optional[float], Optional[float]]]] = (
-        None  # bounds in theta-space
-    )
-
-    def __post_init__(self):
-        if self.xi <= 0.0:
+    def __init__(
+        self,
+        names: Sequence[str] | None = None,
+        theta0: Mapping[str, float] | None = None,
+        *,
+        xi: float = 10.0,
+        vary: Mapping[str, bool] | None = None,
+        theta_bounds: Mapping[str, tuple[float | None, float | None]] | None = None,
+        parameters: Iterable[Parameter] | None = None,
+    ):
+        if xi <= 0.0:
             raise ValueError("xi must be > 0.")
-        if self.xi == 1.0:
+        if xi == 1.0:
             raise ValueError("xi == 1 makes dθ/dφ = 0.")
-        # arrays in declared order
-        self._theta0_vec = np.asarray(
-            [float(self.theta0[k]) for k in self.names], dtype=float
-        )
-        self._vary_vec = np.asarray(
-            [
-                (True if self.vary is None else bool(self.vary.get(k, True)))
-                for k in self.names
-            ],
-            dtype=bool,
-        )
-        # bounds in theta-space to arrays
-        if self.theta_bounds is None:
-            self._th_lo = None
-            self._th_hi = None
-        else:
-            lo = []
-            hi = []
-            for k in self.names:
-                b = self.theta_bounds.get(k, (None, None))
-                lo.append(-np.inf if b[0] is None else float(b[0]))
-                hi.append(+np.inf if b[1] is None else float(b[1]))
-            self._th_lo = np.asarray(lo, dtype=float)
-            self._th_hi = np.asarray(hi, dtype=float)
 
+        self.xi = float(xi)
         self._ln_xi = math.log(self.xi)
+
+        self._parameters: List[Parameter] = []
+        self._theta0_map: Dict[str, float] = {}
+        self._vary_map: Dict[str, bool] = {}
+        self._bounds_map: Dict[str, tuple[float | None, float | None]] = {}
+
+        if parameters is not None:
+            for spec in parameters:
+                self._append_parameter(spec, rebuild=False)
+
+        if names is not None or theta0 is not None:
+            if names is None or theta0 is None:
+                raise ValueError("names and theta0 must be provided together.")
+            for name in names:
+                if name not in theta0:
+                    raise ValueError(f"Missing theta0 entry for parameter '{name}'.")
+                spec = Parameter(
+                    name=name,
+                    theta0=float(theta0[name]),
+                    vary=True if vary is None else bool(vary.get(name, True)),
+                    bounds=(
+                        theta_bounds.get(name, (None, None))
+                        if theta_bounds is not None
+                        else (None, None)
+                    ),
+                )
+                self._append_parameter(spec, rebuild=False)
+
+        self._rebuild_cache()
+
+    # ---------- parameter management ----------
+    def add_parameter(
+        self,
+        parameter: Parameter | None = None,
+        *,
+        name: str | None = None,
+        theta0: float | None = None,
+        vary: bool = True,
+        bounds: tuple[float | None, float | None] | None = None,
+    ) -> Parameter:
+        """
+        Register a new optimisation parameter.
+
+        Parameters can be supplied either as a :class:`Parameter` instance or through
+        the keyword arguments ``name``/``theta0``/``vary``/``bounds``.
+        """
+
+        if parameter is None:
+            if name is None or theta0 is None:
+                raise ValueError("Provide a Parameter instance or name/theta0 pair.")
+            parameter = Parameter(
+                name=name,
+                theta0=float(theta0),
+                vary=bool(vary),
+            bounds=bounds if bounds is not None else (None, None),
+            )
+        elif not isinstance(parameter, Parameter):
+            raise TypeError("parameter must be a Parameter instance.")
+
+        self._append_parameter(parameter, rebuild=True)
+        return parameter
+
+    def parameters(self) -> List[Parameter]:
+        """Return a copy of the registered parameter specifications."""
+        return list(self._parameters)
 
     # ---------- mapping ----------
     def theta_from_phi(self, phi_vec: Array) -> Array:
-        phi_vec = np.asarray(phi_vec, dtype=float)
-        return self._theta0_vec * np.power(self.xi, phi_vec)
+        phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
+        return cast(Array, self._theta0_vec * np.power(self.xi, phi_vec))
 
     def dtheta_dphi(self, phi_vec: Array) -> Array:
         theta = self.theta_from_phi(phi_vec)
-        return theta * self._ln_xi
+        return cast(Array, theta * self._ln_xi)
 
     def phi_from_theta(self, theta_vec: Array) -> Array:
-        theta_vec = np.asarray(theta_vec, dtype=float)
+        theta_vec = cast(Array, np.asarray(theta_vec, dtype=float))
         ratio = theta_vec / self._theta0_vec
         if np.any(ratio <= 0.0):
             raise ValueError("theta must be > 0 elementwise to invert mapping.")
-        return np.log(ratio) / self._ln_xi
+        return cast(Array, np.log(ratio) / self._ln_xi)
 
     # ---------- bounds ----------
-    def phi_bounds(self) -> Optional[Tuple[Array, Array]]:
+    def phi_bounds(self) -> tuple[Array, Array] | None:
         """Transform theta-bounds to phi-bounds for scipy."""
         if self._th_lo is None and self._th_hi is None:
             return None
-        lo = np.full(len(self.names), -np.inf, dtype=float)
-        hi = np.full(len(self.names), +np.inf, dtype=float)
+        lo = cast(Array, np.full(len(self._names), -np.inf, dtype=float))
+        hi = cast(Array, np.full(len(self._names), +np.inf, dtype=float))
         if self._th_lo is not None:
             mask = np.isfinite(self._th_lo)
             lo[mask] = self.phi_from_theta(self._th_lo)[mask]
@@ -92,32 +174,37 @@ class ParameterSpace:
     def clamp_theta(self, theta_vec: Array) -> Array:
         if self._th_lo is None and self._th_hi is None:
             return theta_vec
-        out = np.asarray(theta_vec, dtype=float).copy()
+        out = cast(Array, np.asarray(theta_vec, dtype=float).copy())
         if self._th_lo is not None:
             out = np.maximum(out, self._th_lo)
         if self._th_hi is not None:
             out = np.minimum(out, self._th_hi)
-        return out
+        return cast(Array, out)
 
     # ---------- masks and packing ----------
-    def active_mask(self) -> Array:
-        return self._vary_vec.copy()
+    def active_mask(self) -> BoolArray:
+        return cast(BoolArray, self._vary_vec.copy())
 
-    def pack_dict(self, d: Dict[str, float]) -> Array:
-        return np.asarray([float(d[k]) for k in self.names], dtype=float)
+    def pack_dict(self, d: Mapping[str, float]) -> Array:
+        return cast(
+            Array, np.asarray([float(d[k]) for k in self._names], dtype=float)
+        )
 
     def unpack_vec(self, v: Sequence[float]) -> Dict[str, float]:
-        return {k: float(x) for k, x in zip(self.names, np.asarray(v, dtype=float))}
+        return {
+            k: float(x)
+            for k, x in zip(self._names, np.asarray(v, dtype=float))
+        }
 
     # ---------- Jacobian / gradient transforms ----------
     # J_theta: (m, n) = ∂r/∂theta ; returns ∂r/∂phi
     def J_theta_to_phi(self, J_theta: Array, phi_vec: Array) -> Array:
         scale = self.dtheta_dphi(phi_vec)  # (n,)
-        return J_theta * scale[np.newaxis, :]
+        return cast(Array, J_theta * scale[np.newaxis, :])
 
     # g_theta: (n,) = ∂f/∂theta ; returns ∂f/∂phi
     def grad_theta_to_phi(self, g_theta: Array, phi_vec: Array) -> Array:
-        return g_theta * self.dtheta_dphi(phi_vec)
+        return cast(Array, g_theta * self.dtheta_dphi(phi_vec))
 
     # ---------- wrappers for scipy ----------
     def wrap_residual(
@@ -135,7 +222,7 @@ class ParameterSpace:
     def wrap_jacobian(
         self,
         residual_theta: Callable[[Array], Array],
-        jac_theta: Optional[Callable[[Array], Array]] = None,
+        jac_theta: Callable[[Array], Array] | None = None,
     ) -> Callable[[Array], Array]:
         """
         If jac_theta is provided: return analytic J_phi.
@@ -154,3 +241,73 @@ class ParameterSpace:
             return self.J_theta_to_phi(Jt, phi_vec)
 
         return jac
+
+    # ---------- compatibility helpers ----------
+    @property
+    def names(self) -> List[str]:
+        return list(self._names)
+
+    @property
+    def theta0(self) -> Dict[str, float]:
+        return dict(self._theta0_map)
+
+    @property
+    def theta_bounds(self) -> Dict[str, tuple[float | None, float | None]]:
+        return dict(self._bounds_map)
+
+    @property
+    def vary(self) -> Dict[str, bool]:
+        return dict(self._vary_map)
+
+    # ---------- internal helpers ----------
+    def _append_parameter(self, spec: Parameter, rebuild: bool) -> None:
+        name = spec.name
+        if name in self._theta0_map:
+            raise ValueError(f"Parameter '{name}' already registered.")
+
+        self._parameters.append(spec)
+        self._theta0_map[name] = float(spec.theta0)
+        self._vary_map[name] = bool(spec.vary)
+        bounds = spec.bounds if spec.bounds is not None else (None, None)
+        if len(bounds) != 2:
+            raise ValueError("bounds must be a (low, high) tuple.")
+        self._bounds_map[name] = tuple(bounds)  # type: ignore[assignment]
+
+        if rebuild:
+            self._rebuild_cache()
+
+    def _rebuild_cache(self) -> None:
+        if not self._parameters:
+            self._names = []
+            self._theta0_vec = cast(Array, np.asarray([], dtype=float))
+            self._vary_vec = cast(BoolArray, np.asarray([], dtype=bool))
+            self._th_lo = None
+            self._th_hi = None
+            return
+
+        self._names = [p.name for p in self._parameters]
+        self._theta0_vec = cast(
+            Array,
+            np.asarray([float(p.theta0) for p in self._parameters], dtype=float),
+        )
+        self._vary_vec = cast(
+            BoolArray,
+            np.asarray([bool(p.vary) for p in self._parameters], dtype=bool),
+        )
+
+        lo_vals = []
+        hi_vals = []
+        any_lo = False
+        any_hi = False
+        for p in self._parameters:
+            lo, hi = p.bounds if p.bounds is not None else (None, None)
+            lo_vals.append(-np.inf if lo is None else float(lo))
+            hi_vals.append(+np.inf if hi is None else float(hi))
+            any_lo = any_lo or (lo is not None)
+            any_hi = any_hi or (hi is not None)
+
+        self._th_lo = cast(Array, np.asarray(lo_vals, dtype=float)) if any_lo else None
+        self._th_hi = cast(Array, np.asarray(hi_vals, dtype=float)) if any_hi else None
+
+
+__all__ = ["Parameter", "ParameterSpace"]

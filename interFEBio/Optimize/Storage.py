@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable
 import shutil
 import warnings
 
@@ -19,7 +19,7 @@ def _unescape_mount_token(token: str) -> str:
     )
 
 
-def _filesystem_type(path: Path) -> Optional[str]:
+def _filesystem_type(path: Path) -> str | None:
     """
     Best-effort detection of the filesystem type at `path`.
 
@@ -63,10 +63,10 @@ class StorageManager:
     named after the current working directory.
     """
 
-    parent: Optional[Path] = None
+    parent: Path | None = None
     use_tmp: bool = False
     create: bool = True
-    _root: Optional[Path] = field(default=None, init=False, repr=False)
+    _root: Path | None = field(default=None, init=False, repr=False)
 
     def resolve(self) -> Path:
         """Return the directory where all simulation files should be generated."""
@@ -78,8 +78,9 @@ class StorageManager:
         return self._root
 
     def _resolve_parent(self) -> Path:
-        root = Path(self.parent).expanduser()
-        root = root.resolve()
+        if self.parent is None:
+            raise ValueError("parent must be provided for disk storage.")
+        root = self.parent.expanduser().resolve()
         if self.create:
             root.mkdir(parents=True, exist_ok=True)
         return root
@@ -93,7 +94,7 @@ class StorageManager:
                 RuntimeWarning,
                 stacklevel=2,
             )
-        if self.parent:
+        if self.parent is not None:
             label = Path(self.parent).name
         else:
             label = Path.cwd().name
@@ -113,7 +114,7 @@ class StorageManager:
         else:
             target.unlink(missing_ok=True)
 
-    def cleanup_all(self, keep: Optional[Iterable[Path]] = None) -> None:
+    def cleanup_all(self, keep: Iterable[Path] | None = None) -> None:
         root = self.resolve()
         keep_set = {Path(p).resolve() for p in (keep or [])}
         for child in root.iterdir():

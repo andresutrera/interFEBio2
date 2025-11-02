@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Sequence, cast
 
 import numpy as np
+
+BoundsLike = Sequence[tuple[float, float]] | tuple[np.ndarray, np.ndarray] | None
+Callback = Callable[[np.ndarray, float], None]
 
 
 class OptimizerAdapter:
     def minimize(
         self,
         fun: Callable[[np.ndarray], np.ndarray],
-        jac: Optional[Callable[[np.ndarray], np.ndarray]],
+        jac: Callable[[np.ndarray], np.ndarray] | None,
         phi0: np.ndarray,
-        bounds: Optional[Sequence[Tuple[float, float]]],
-        callbacks: Optional[Iterable[Callable[[np.ndarray, np.ndarray], None]]] = None,
-    ) -> Tuple[np.ndarray, dict]:
+        bounds: BoundsLike,
+        callbacks: Iterable[Callback] | None = None,
+    ) -> tuple[np.ndarray, dict]:
         raise NotImplementedError
 
 
@@ -24,11 +27,11 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
     def minimize(
         self,
         fun: Callable[[np.ndarray], np.ndarray],
-        jac: Optional[Callable[[np.ndarray], np.ndarray]],
+        jac: Callable[[np.ndarray], np.ndarray] | None,
         phi0: np.ndarray,
-        bounds: Optional[Sequence[Tuple[float, float]]],
-        callbacks: Optional[Iterable[Callable[[np.ndarray, np.ndarray], None]]] = None,
-    ) -> Tuple[np.ndarray, dict]:
+        bounds: BoundsLike,
+        callbacks: Iterable[Callback] | None = None,
+    ) -> tuple[np.ndarray, dict]:
         import scipy.optimize
 
         cb_list = list(callbacks or [])
@@ -44,11 +47,23 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
             for cb in cb_list:
                 cb(vec, cost)
 
+        if bounds is None:
+            lower = np.full_like(phi0, -np.inf, dtype=float)
+            upper = np.full_like(phi0, np.inf, dtype=float)
+        elif isinstance(bounds, tuple) and len(bounds) == 2 and all(isinstance(b, np.ndarray) for b in bounds):
+            lower = np.asarray(bounds[0], dtype=float)
+            upper = np.asarray(bounds[1], dtype=float)
+        else:
+            seq_bounds = cast(Sequence[tuple[float, float]], bounds)
+            lower = np.asarray([b[0] for b in seq_bounds], dtype=float)
+            upper = np.asarray([b[1] for b in seq_bounds], dtype=float)
+        lsq_bounds = (lower, upper)
+
         result = scipy.optimize.least_squares(  # type: ignore[attr-defined]
             fun,
             phi0,
             jac=jac if jac is not None else "2-point",
-            bounds=bounds if bounds is not None else (-np.inf, np.inf),
+            bounds=lsq_bounds,
             callback=_callback if cb_list else None,
             **self.kwargs,
         )
@@ -67,11 +82,11 @@ class ScipyMinimizeAdapter(OptimizerAdapter):
     def minimize(
         self,
         fun: Callable[[np.ndarray], np.ndarray],
-        jac: Optional[Callable[[np.ndarray], np.ndarray]],
+        jac: Callable[[np.ndarray], np.ndarray] | None,
         phi0: np.ndarray,
-        bounds: Optional[Sequence[Tuple[float, float]]],
-        callbacks: Optional[Iterable[Callable[[np.ndarray, np.ndarray], None]]] = None,
-    ) -> Tuple[np.ndarray, dict]:
+        bounds: BoundsLike,
+        callbacks: Iterable[Callback] | None = None,
+    ) -> tuple[np.ndarray, dict]:
         import scipy.optimize
 
         if jac is None:
@@ -84,7 +99,7 @@ class ScipyMinimizeAdapter(OptimizerAdapter):
         def grad(x: np.ndarray) -> np.ndarray:
             r = fun(x)
             J = jac(x)
-            return J.T @ r
+            return cast(np.ndarray, J.T @ r)
 
         cb_list = list(callbacks or [])
 
@@ -95,12 +110,21 @@ class ScipyMinimizeAdapter(OptimizerAdapter):
             for cb in cb_list:
                 cb(vec, cost)
 
+        if isinstance(bounds, tuple) and len(bounds) == 2 and all(isinstance(b, np.ndarray) for b in bounds):
+            lower = np.asarray(bounds[0], dtype=float)
+            upper = np.asarray(bounds[1], dtype=float)
+            min_bounds: Sequence[tuple[float, float]] | None = list(
+                zip(lower.tolist(), upper.tolist())
+            )
+        else:
+            min_bounds = cast(Sequence[tuple[float, float]] | None, bounds)
+
         result = scipy.optimize.minimize(  # type: ignore[attr-defined]
             objective,
             phi0,
             jac=grad,
             method=self.method,
-            bounds=bounds,
+            bounds=min_bounds,
             callback=_callback if cb_list else None,
             **self.kwargs,
         )

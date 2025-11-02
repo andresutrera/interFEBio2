@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .alignment import Aligner, EvaluationGrid
 
 
-WeightFunction = Callable[[np.ndarray], np.ndarray]
+Array = NDArray[np.float64]
+WeightFunction = Callable[[Array], Array]
 
 
 @dataclass
@@ -30,7 +32,7 @@ class ResidualAssembler:
 
     grid: EvaluationGrid
     aligner: Aligner = field(default_factory=Aligner)
-    weight_fn: Optional[WeightFunction] = None
+    weight_fn: WeightFunction | None = None
 
     def __post_init__(self) -> None:
         if self.aligner is None:
@@ -38,11 +40,20 @@ class ResidualAssembler:
 
     def assemble(
         self,
-        experiments: Dict[str, Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]],
-        simulations: Dict[str, Tuple[np.ndarray, np.ndarray]],
-    ) -> Tuple[np.ndarray, Dict[str, slice]]:
-        residuals: List[np.ndarray] = []
+        experiments: Dict[str, tuple[Array, Array, Array | None]],
+        simulations: Dict[str, tuple[Array, Array]],
+    ) -> tuple[Array, Dict[str, slice]]:
+        residuals, slices, _ = self.assemble_with_details(experiments, simulations)
+        return residuals, slices
+
+    def assemble_with_details(
+        self,
+        experiments: Dict[str, tuple[Array, Array, Array | None]],
+        simulations: Dict[str, tuple[Array, Array]],
+    ) -> tuple[Array, Dict[str, slice], Dict[str, Dict[str, Array | None]]]:
+        residuals: List[Array] = []
         slices: Dict[str, slice] = {}
+        details: Dict[str, Dict[str, Array | None]] = {}
         offset = 0
         for name, (x_exp, y_exp, weight) in experiments.items():
             sim = simulations.get(name)
@@ -53,25 +64,39 @@ class ResidualAssembler:
             target = self.grid.select_grid(x_exp, x_sim)
             y_exp_interp = self.aligner.map(x_exp, y_exp, target)
             y_sim_interp = self.aligner.map(x_sim, y_sim, target)
-            res = y_sim_interp - y_exp_interp
+            delta = y_sim_interp - y_exp_interp
+            res = delta.copy()
+            weights_applied: Array | None = None
 
             if weight is not None:
                 if weight.shape != res.shape:
-                    interpolated = np.interp(target, x_exp, weight, left=1.0, right=1.0)
-                    res = res * interpolated
+                    interpolated = np.interp(
+                        target, x_exp, weight, left=1.0, right=1.0
+                    )
+                    weights_applied = cast(Array, np.asarray(interpolated, dtype=float))
                 else:
-                    res = res * weight
+                    weights_applied = cast(Array, np.asarray(weight, dtype=float))
             elif self.weight_fn is not None:
-                weights = self.weight_fn(target)
-                res = res * weights
+                weights_applied = self.weight_fn(target)
 
-            residuals.append(res)
+            if weights_applied is not None:
+                res = res * weights_applied
+
+            residuals.append(cast(Array, res))
             slices[name] = slice(offset, offset + res.size)
+            details[name] = {
+                "grid": target,
+                "y_exp": y_exp_interp,
+                "y_sim": y_sim_interp,
+                "residual": delta,
+                "weights": weights_applied,
+            }
             offset += res.size
 
         if not residuals:
-            return np.array([], dtype=float), {}
-        return np.concatenate(residuals), slices
+            empty = cast(Array, np.array([], dtype=float))
+            return empty, {}, {}
+        return cast(Array, np.concatenate(residuals)), slices, details
 
 
 __all__ = ["ResidualAssembler"]

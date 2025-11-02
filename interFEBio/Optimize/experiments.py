@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 
-ArrayLike = Sequence[float]
-WeightFunction = Callable[[ArrayLike], np.ndarray]
+WeightFunction = Callable[[np.ndarray], np.ndarray]
 
 
 @dataclass
@@ -17,9 +16,9 @@ class ExperimentSeries:
 
     x: np.ndarray
     y: np.ndarray
-    weight: Optional[WeightFunction] = None
+    weight: WeightFunction | None = None
 
-    def weighted(self) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    def weighted(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray | None]:
         if self.weight is None:
             return self.x, self.y, None
         weights = self.weight(self.x)
@@ -27,4 +26,3 @@ class ExperimentSeries:
 
 
 __all__ = ["ExperimentSeries", "WeightFunction"]
-

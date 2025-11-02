@@ -9,7 +9,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Dict, Sequence
 from contextlib import suppress
 import threading
 
@@ -35,7 +35,7 @@ class RunHandle:
 
     _future: Future[RunResult]
 
-    def wait(self, timeout: Optional[float] = None) -> RunResult:
+    def wait(self, timeout: float | None = None) -> RunResult:
         return self._future.result(timeout)
 
     def done(self) -> bool:  # pragma: no cover - passthrough convenience
@@ -54,7 +54,13 @@ class RunHandle:
 class Runner:
     """Minimal interface expected by the optimisation engine."""
 
-    def run(self, job_dir: str | Path, feb_name: str | Path) -> RunHandle:
+    def run(
+        self,
+        job_dir: str | Path,
+        feb_name: str | Path,
+        *,
+        env: dict[str, str] | None = None,
+    ) -> RunHandle:
         raise NotImplementedError
 
     def shutdown(self) -> None:  # pragma: no cover - simple default
@@ -69,7 +75,7 @@ class _BaseLocalRunner(Runner):
         command: Sequence[str] | None = None,
         *,
         max_workers: int = 1,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ):
         self.command = tuple(command or ("febio4", "-i"))
         if not self.command:
@@ -80,10 +86,16 @@ class _BaseLocalRunner(Runner):
         self._active_lock = threading.Lock()
         atexit.register(self.shutdown)
 
-    def run(self, job_dir: str | Path, feb_name: str | Path) -> RunHandle:
+    def run(
+        self,
+        job_dir: str | Path,
+        feb_name: str | Path,
+        *,
+        env: dict[str, str] | None = None,
+    ) -> RunHandle:
         job_path = Path(job_dir)
         feb_path = Path(feb_name)
-        future = self._executor.submit(self._run_once, job_path, feb_path)
+        future = self._executor.submit(self._run_once, job_path, feb_path, env)
         return RunHandle(future)
 
     def shutdown(self) -> None:
@@ -98,7 +110,12 @@ class _BaseLocalRunner(Runner):
         self._executor.shutdown(wait=False)
 
     # ---- internal helpers -------------------------------------------------
-    def _run_once(self, job_path: Path, feb_name: Path) -> RunResult:
+    def _run_once(
+        self,
+        job_path: Path,
+        feb_name: Path,
+        env: dict[str, str] | None = None,
+    ) -> RunResult:
         job_path.mkdir(parents=True, exist_ok=True)
         feb_path = feb_name if feb_name.is_absolute() else job_path / feb_name
         if not feb_path.exists():
@@ -113,7 +130,7 @@ class _BaseLocalRunner(Runner):
                 cwd=str(job_path),
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
-                env=self._merged_env(),
+                env=self._merged_env(env),
                 start_new_session=True,
             )
             with self._active_lock:
@@ -134,11 +151,17 @@ class _BaseLocalRunner(Runner):
         )
         return result
 
-    def _merged_env(self) -> Optional[Dict[str, str]]:
-        if self.env is None:
+    def _merged_env(
+        self,
+        override: dict[str, str] | None = None,
+    ) -> dict[str, str] | None:
+        if self.env is None and not override:
             return None
         merged = os.environ.copy()
-        merged.update(self.env)
+        if self.env:
+            merged.update(self.env)
+        if override:
+            merged.update(override)
         return merged
 
 
@@ -149,7 +172,7 @@ class LocalSerialRunner(_BaseLocalRunner):
         self,
         command: Sequence[str] | None = None,
         *,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ):
         super().__init__(command, max_workers=1, env=env)
 
@@ -162,7 +185,7 @@ class LocalParallelRunner(_BaseLocalRunner):
         n_jobs: int,
         command: Sequence[str] | None = None,
         *,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ):
         if n_jobs < 1:
             raise ValueError("n_jobs must be >= 1.")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Optional
+from typing import Dict, Iterable, Mapping, cast
 import xml.etree.ElementTree as ET
 
 Number = float
@@ -68,7 +68,7 @@ class FebTemplate:
     """FEBio template plus bindings applied during rendering."""
 
     template_path: Path | str
-    bindings: Iterable[ParameterBinding] = field(default_factory=list)
+    bindings: list[ParameterBinding] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.template_path = Path(self.template_path)
@@ -83,11 +83,11 @@ class FebTemplate:
     def render(
         self,
         theta: Mapping[str, Number],
-        ctx: Optional[BuildContext] = None,
+        ctx: BuildContext | None = None,
     ) -> ET.ElementTree:
         ctx = ctx or BuildContext()
-        tree = ET.parse(self.template_path)
-        root = tree.getroot()
+        tree = cast(ET.ElementTree, ET.parse(self.template_path))
+        root = cast(ET.Element, tree.getroot())
         for binding in self.bindings:
             binding.apply(root, theta, ctx)
         return tree
@@ -96,7 +96,7 @@ class FebTemplate:
         self,
         theta: Mapping[str, Number],
         out_path: Path | str,
-        ctx: Optional[BuildContext] = None,
+        ctx: BuildContext | None = None,
     ) -> Path:
         tree = self.render(theta, ctx)
         out_file = Path(out_path)
@@ -116,13 +116,13 @@ class FebBuilder:
         self,
         theta: Mapping[str, Number],
         out_root: Path | str,
-        out_name: Optional[str] = None,
-        ctx: Optional[BuildContext] = None,
+        out_name: str | None = None,
+        ctx: BuildContext | None = None,
     ) -> Path:
         ctx = ctx or BuildContext()
         sim_dir = Path(out_root) / self.subfolder
         sim_dir.mkdir(parents=True, exist_ok=True)
-        base_name = out_name or self.template.template_path.name
+        base_name = out_name or Path(self.template.template_path).name
         feb_path = sim_dir / base_name
         return self.template.write(theta, feb_path, ctx)
 

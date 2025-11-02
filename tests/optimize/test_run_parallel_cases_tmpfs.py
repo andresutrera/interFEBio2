@@ -15,7 +15,13 @@ def test_run_parallel_cases_with_tmpfs_backend(monkeypatch, tmp_path: Path) -> N
         def __init__(self, *args, **kwargs):
             pass
 
-        def run(self, job_dir: str | Path, feb_name: str | Path) -> RunHandle:
+        def run(
+            self,
+            job_dir: str | Path,
+            feb_name: str | Path,
+            *,
+            env: dict | None = None,
+        ) -> RunHandle:
             job_dir = Path(job_dir)
             feb_name = Path(feb_name)
             feb_path = job_dir / feb_name

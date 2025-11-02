@@ -243,10 +243,13 @@ def collect_results(running: List[Case]) -> List[tuple[Case, RunResult]]:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.storage_backend == "tmpfs":
-        output_dir = StorageManager(use_tmp=True).resolve()
-    else:
+        sim_root = StorageManager(use_tmp=True).resolve()
         output_dir = args.output.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        sim_root = args.output.resolve()
+        sim_root.mkdir(parents=True, exist_ok=True)
+        output_dir = sim_root
     emitter = create_event_emitter(args.event_socket)
 
     template_path = (
@@ -267,7 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
 
     cases = build_cases(
-        output_dir,
+        sim_root,
         template_path,
         parameter_space,
         phi_vectors,

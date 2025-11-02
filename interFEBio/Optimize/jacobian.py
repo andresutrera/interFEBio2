@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, cast
+import inspect
 
 import numpy as np
+from numpy.typing import NDArray
 
-Array = np.ndarray
+Array = NDArray[np.float64]
 
 
 @dataclass
@@ -31,33 +33,79 @@ class JacobianComputer:
         self,
         phi0: Array,
         theta_fn: Callable[[Array], Array],
-        residual_fn: Callable[[Array, Optional[str]], Array],
+        residual_fn: Callable[[Array, str | None], Array],
         *,
-        label_fn: Optional[Callable[[int], Optional[str]]] = None,
-        base_residual: Optional[Array] = None,
-    ) -> Tuple[Array, Array]:
-        phi0 = np.asarray(phi0, dtype=float)
+        label_fn: Callable[[int], str | None] | None = None,
+        base_residual: Array | None = None,
+    ) -> tuple[Array, Array]:
+        phi0 = cast(Array, np.asarray(phi0, dtype=float))
         theta0 = theta_fn(phi0)
         base_label = label_fn(-1) if label_fn is not None else None
 
+        accepts_label = self._residual_accepts_label(residual_fn)
+
         if base_residual is None:
-            r0 = np.asarray(residual_fn(theta0, base_label), dtype=float)
+            r0 = cast(
+                Array,
+                np.asarray(
+                    self._call_residual(
+                        residual_fn,
+                        theta0,
+                        base_label,
+                        accepts_label,
+                    ),
+                    dtype=float,
+                ),
+            )
         else:
-            r0 = np.asarray(base_residual, dtype=float)
+            r0 = cast(Array, np.asarray(base_residual, dtype=float))
 
         n = len(phi0)
-        J = np.zeros((r0.size, n), dtype=float)
+        J = cast(Array, np.zeros((r0.size, n), dtype=float))
 
         for i in range(n):
             phi = phi0.copy()
             phi[i] += self.perturbation
             theta = theta_fn(phi)
             lbl = label_fn(i) if label_fn is not None else None
-            ri = np.asarray(residual_fn(theta, lbl), dtype=float)
+            ri = cast(
+                Array,
+                np.asarray(
+                    self._call_residual(residual_fn, theta, lbl, accepts_label),
+                    dtype=float,
+                ),
+            )
             J[:, i] = (ri - r0) / self.perturbation
 
         return r0, J
 
+    @staticmethod
+    def _residual_accepts_label(
+        residual_fn: Callable[..., Array]
+    ) -> bool:
+        sig = inspect.signature(residual_fn)
+        positional = [
+            p
+            for p in sig.parameters.values()
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        ]
+        if len(positional) >= 2:
+            return True
+        for p in sig.parameters.values():
+            if p.kind == p.VAR_POSITIONAL:
+                return True
+        return False
+
+    @staticmethod
+    def _call_residual(
+        residual_fn: Callable[..., Array],
+        theta: Array,
+        label: str | None,
+        accepts_label: bool,
+    ) -> Array:
+        if accepts_label:
+            return residual_fn(theta, label)
+        return residual_fn(theta)
+
 
 __all__ = ["JacobianComputer"]
-
