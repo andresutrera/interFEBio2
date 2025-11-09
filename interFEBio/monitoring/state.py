@@ -1,3 +1,5 @@
+"""Track manifest-based jobs and runtime updates for the monitor UI."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +12,7 @@ from typing import Dict, Iterable, List, Optional
 
 @dataclass
 class ArtifactInfo:
+    """Describe a file artifact attached to a job."""
     kind: str
     path: Path
     size: int
@@ -17,6 +20,7 @@ class ArtifactInfo:
 
 @dataclass
 class JobInfo:
+    """Hold metadata for a stored monitoring job."""
     project: str
     iter_id: int
     case: str
@@ -31,15 +35,15 @@ class JobInfo:
 
     @property
     def job_id(self) -> str:
+        """Return the stable identifier for this job."""
         return f"{self.project}/iter{self.iter_id}/{self.case}/{self.tag}"
 
 
 class StorageInventory:
-    """
-    Scans storage roots produced by :class:`StorageManager` and builds a view of jobs.
-    """
+    """Scan manifest roots and build a current view of stored jobs."""
 
     def __init__(self, roots: Iterable[Path], *, poll_interval: float = 5.0):
+        """Set up the inventory scanner with the provided storage roots."""
         self.roots = [Path(r).resolve() for r in roots]
         self.poll_interval = max(1.0, float(poll_interval))
         self._lock = threading.Lock()
@@ -47,6 +51,7 @@ class StorageInventory:
         self._last_scan = 0.0
 
     def refresh(self, force: bool = False) -> None:
+        """Refresh the inventory if the poll interval allows or forcing is requested."""
         now = time.time()
         if not force and now - self._last_scan < self.poll_interval:
             return
@@ -117,10 +122,12 @@ class StorageInventory:
             self._last_scan = now
 
     def list_jobs(self) -> List[JobInfo]:
+        """Return the current snapshot of discovered jobs."""
         with self._lock:
             return list(self._jobs.values())
 
     def get_job(self, job_id: str) -> Optional[JobInfo]:
+        """Lookup a job by its identifier."""
         with self._lock:
             return self._jobs.get(job_id)
 
@@ -128,6 +135,7 @@ class StorageInventory:
     def apply_event(
         self, job_id: str, event: str, payload: Dict[str, object], ts: float
     ) -> None:
+        """Ingest a monitor event to keep job metadata fresh."""
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
@@ -158,6 +166,7 @@ class StorageInventory:
             self._last_scan = ts
 
     def _create_job_from_id(self, job_id: str) -> JobInfo:
+        """Reconstruct job metadata when an event refers to an unknown job."""
         parts = job_id.split("/")
         project = parts[0] if parts else "default"
         iter_part = parts[1] if len(parts) > 1 else "iter0"

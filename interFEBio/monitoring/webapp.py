@@ -1,3 +1,5 @@
+"""FastAPI web UI for monitoring optimization runs."""
+
 from __future__ import annotations
 
 import argparse
@@ -633,6 +635,7 @@ HOME_BODY = textwrap.dedent(
 
 
 def _render_home_page() -> str:
+    """Render the static HTML shell for the monitor dashboard."""
     return "\n".join(
         [
             "<!doctype html>",
@@ -650,12 +653,14 @@ def create_app(
     inventory: Optional[StorageInventory] = None,
     event_socket: Optional[Path] = None,
 ) -> FastAPI:
+    """Build a FastAPI application exposing the monitor endpoints."""
     registry.refresh()
     app = FastAPI(title="interFEBio Monitor", version="2.0.0")
     listener: Optional[EventSocketListener] = None
 
     @app.on_event("startup")
     async def _startup() -> None:
+        """Start the event listener when the application boots."""
         nonlocal listener
         logger.info("Monitor web app starting up")
         if event_socket:
@@ -665,11 +670,13 @@ def create_app(
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
+        """Shut down the event listener when the app stops."""
         if listener:
             listener.stop()
 
     @app.get("/api/runs")
     async def list_runs():
+        """Return the latest list of runs."""
         registry.refresh()
         runs = registry.list_runs()
         payload = []
@@ -692,6 +699,7 @@ def create_app(
 
     @app.get("/api/runs/{run_id}")
     async def run_detail(run_id: str):
+        """Return metadata for the selected run."""
         registry.refresh()
         run = registry.get_run(run_id)
         if run is None:
@@ -709,6 +717,7 @@ def create_app(
 
     @app.get("/api/runs/{run_id}/iterations")
     async def run_iterations(run_id: str):
+        """Return the iteration history for the selected run."""
         registry.refresh()
         run = registry.get_run(run_id)
         if run is None:
@@ -717,6 +726,7 @@ def create_app(
 
     @app.delete("/api/runs/{run_id}")
     async def delete_run(run_id: str):
+        """Delete a single run if it has finished."""
         try:
             removed = registry.delete_run(run_id)
         except ActiveRunDeletionError:
@@ -730,6 +740,7 @@ def create_app(
 
     @app.delete("/api/runs")
     async def delete_all_runs():
+        """Delete every completed run and report protected ones."""
         registry.refresh()
         total_before = len(registry.list_runs())
         protected = registry.clear()
@@ -739,6 +750,7 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     async def home() -> HTMLResponse:
+        """Render the dashboard HTML."""
         return HTMLResponse(_render_home_page())
 
 
@@ -746,6 +758,7 @@ def create_app(
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    """Parse CLI arguments for the monitoring web app."""
     parser = argparse.ArgumentParser(description="interFEBio monitoring service")
     parser.add_argument(
         "--registry",
@@ -793,6 +806,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
+    """Run the monitoring web app CLI using parsed options."""
     import uvicorn
 
     args = parse_args(argv)

@@ -1,3 +1,5 @@
+"""Socket helpers and envelopes for emitting monitor events."""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +14,8 @@ from typing import Optional, Protocol
 
 @dataclass
 class EventEnvelope:
+    """Wrap a job event into a JSON-ready payload."""
+
     job_id: str
     event: str
     payload: dict
@@ -19,6 +23,7 @@ class EventEnvelope:
     schema: str = "interfebio.jobevent/v1"
 
     def to_json(self) -> str:
+        """Serialize the envelope to a JSON string."""
         return json.dumps(
             {
                 "schema": self.schema,
@@ -31,20 +36,28 @@ class EventEnvelope:
 
 
 class EventEmitter:
+    """Abstract emitter interface for monitor events."""
+
     def emit(self, job_id: str, event: str, payload: dict) -> None:
         raise NotImplementedError
 
 
 class NullEventEmitter(EventEmitter):
+    """Drop events without raising when the monitor is unavailable."""
+
     def emit(self, job_id: str, event: str, payload: dict) -> None:
         return
 
 
 class SocketEventEmitter(EventEmitter):
+    """Emit monitor events through a UNIX domain socket."""
+
     def __init__(self, socket_path: Path):
+        """Keep the socket path for future emission attempts."""
         self.socket_path = Path(socket_path)
 
     def emit(self, job_id: str, event: str, payload: dict) -> None:
+        """Send the serialized envelope to the monitor."""
         envelope = EventEnvelope(job_id=job_id, event=event, payload=payload)
         message = envelope.to_json() + "\n"
         try:
@@ -58,19 +71,25 @@ class SocketEventEmitter(EventEmitter):
 
 
 def create_event_emitter(socket_path: Optional[Path]) -> EventEmitter:
+    """Return an emitter that targets the provided socket path."""
     if socket_path:
         return SocketEventEmitter(socket_path)
     return NullEventEmitter()
 
 
 class EventConsumer(Protocol):
+    """Protocol for objects that consume monitor events."""
+
     def apply_event(
         self, job_id: str, event: str, payload: dict, ts: float
     ) -> None: ...
 
 
 class EventSocketListener:
+    """Listen for monitor events over a UNIX socket."""
+
     def __init__(self, socket_path: Path, consumer: EventConsumer):
+        """Track the path and consumer for the incoming stream."""
         self.socket_path = Path(socket_path)
         self.consumer = consumer
         self._server: Optional[socket.socket] = None
@@ -78,6 +97,7 @@ class EventSocketListener:
         self._stop = threading.Event()
 
     def start(self) -> None:
+        """Start listening for upstream monitor events."""
         if self._thread is not None:
             return
         self.socket_path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,6 +116,7 @@ class EventSocketListener:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop listening and clean up the socket resources."""
         self._stop.set()
         if self._server is not None:
             try:
@@ -113,6 +134,7 @@ class EventSocketListener:
                 pass
 
     def _serve(self) -> None:
+        """Accept connections and spawn handlers for each socket."""
         assert self._server is not None
         while not self._stop.is_set():
             try:
@@ -124,6 +146,7 @@ class EventSocketListener:
             threading.Thread(target=self._handle_conn, args=(conn,), daemon=True).start()
 
     def _handle_conn(self, conn: socket.socket) -> None:
+        """Receive lines, parse JSON, and forward valid events."""
         with conn:
             conn.settimeout(1.0)
             buffer = ""

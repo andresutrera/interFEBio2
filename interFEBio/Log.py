@@ -1,3 +1,5 @@
+"""Configure the shared logger for interFEBio."""
+
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -9,17 +11,12 @@ if TYPE_CHECKING:
 
 
 class Log:
+    """Ensure a single configured logger across the package."""
+
     _instance: Optional["Log"] = None
 
     def __new__(cls: type["Log"], *args: Any, **kwargs: Any) -> "Log":
-        """
-        Create or return the singleton instance of the Log class.
-
-        On the first call, it creates a new instance and configures the logger.
-        Subsequent calls can optionally trigger a reconfiguration when new arguments
-        or keyword options are provided.
-
-        """
+        """Establish or reconfigure the singleton logger instance."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._configure(*args, **kwargs)
@@ -35,13 +32,7 @@ class Log:
         retention: str = "10 days",
         debug_mode: bool = False,
     ) -> None:
-        """
-        Configure the underlying loguru logger.
-
-        This sets up console and optional file logging with specified levels,
-        rotation, retention, and debug mode.
-
-        """
+        """Apply console and file logging options to the logger."""
         _logger.remove()
         console_level = "DEBUG" if debug_mode else level
 
@@ -71,11 +62,5 @@ class Log:
 
     @property
     def logger(self) -> "Logger":  # use string literal here
-        """
-        Return the underlying loguru logger instance.
-
-        This property provides access to the configured singleton logger.
-        All logging calls should be made through this object.
-
-        """
+        """Return the configured loguru logger for emission."""
         return _logger

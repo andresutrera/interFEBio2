@@ -35,7 +35,7 @@ def read_sigma_xx(xplt_path: Path) -> tuple[np.ndarray, np.ndarray]:
     return times, np.asarray(sigma_xx, dtype=float)
 
 
-def build_case(exp_series: ExperimentSeries) -> SimulationCase:
+def build_case(exp_series: ExperimentSeries, name: str) -> SimulationCase:
     template = FebTemplate(
         TEMPLATE_PATH,
         bindings=[
@@ -48,8 +48,8 @@ def build_case(exp_series: ExperimentSeries) -> SimulationCase:
     return SimulationCase(
         template=template,
         subfolder="",
-        experiments={"biaxial": exp_series},
-        adapters={"biaxial": SimulationAdapter(read_sigma_xx)},
+        experiments={name: exp_series},
+        adapters={name: SimulationAdapter(read_sigma_xx)},
     )
 
 
@@ -59,11 +59,12 @@ def main() -> None:
 
     parameter_space = ParameterSpace(xi=2.0)
     parameter_space.add_parameter(name="G", theta0=0.5)
-    case = build_case(exp_series)
+    case = build_case(exp_series, "biax1")
+    case2 = build_case(exp_series, "biax2")
 
     engine = Engine(
         parameter_space=parameter_space,
-        cases=[case],
+        cases=[case, case2],
         grid_policy="sim_to_exp",
         use_jacobian=True,
         jacobian_perturbation=1e-4,

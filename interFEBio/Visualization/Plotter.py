@@ -1,3 +1,5 @@
+"""Helpers for translating FEBio meshes to PyVista geometries and fields."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,6 +36,7 @@ _VTK_MAP: Dict[tuple[str, int], int] = {
 
 
 def _norm_label(raw: str, k: int) -> str:
+    """Normalize FE labels when mapping to VTK cell types."""
     s = str(raw).upper().replace("ELEM_", "")
     if s.startswith("FE_"):
         s = s[3:]
@@ -55,11 +58,12 @@ def _norm_label(raw: str, k: int) -> str:
 
 
 def _vtk_cell_type(etype: str, k: int) -> int | None:
+    """Look up the PyVista cell id for the given FEBio element."""
     return _VTK_MAP.get((_norm_label(etype, k), k))
 
 
 def _six_to_nine(voigt6: np.ndarray) -> np.ndarray:
-    # (N,6)[xx,yy,zz,yz,xz,xy] -> (N,9) row-major 3x3
+    """Expand symmetric tensor components to full row-major 3x3 entries."""
     v = np.asarray(voigt6, dtype=np.float32)
     out = np.empty((v.shape[0], 9), dtype=np.float32)
     xx, yy, zz, yz, xz, xy = v.T
@@ -76,11 +80,13 @@ def _six_to_nine(voigt6: np.ndarray) -> np.ndarray:
 
 
 def _attach_point(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
+    """Attach point-wise data to the PyVista dataset."""
     a = np.asarray(arr, dtype=np.float32)
     ds.point_data[name] = a
 
 
 def _attach_cell(ds: pv.DataSet, name: str, arr: np.ndarray) -> None:
+    """Attach cell-wise data to the PyVista dataset."""
     a = np.asarray(arr, dtype=np.float32)
     ds.cell_data[name] = a
 
@@ -97,6 +103,7 @@ class PVBridge:
     # ---------- grids ----------
 
     def domain_grid(self, domain: str) -> pv.UnstructuredGrid:
+        """Build the unstructured grid for the requested domain."""
         m = self.mesh
         if domain not in m.parts:
             raise KeyError(f"unknown domain '{domain}'")
@@ -133,6 +140,7 @@ class PVBridge:
         return pv.UnstructuredGrid(cells, ctypes, xyz).clean(tolerance=0.0)
 
     def surface_mesh(self, surface: str) -> pv.PolyData:
+        """Build the surface mesh for the requested surface."""
         m = self.mesh
         if surface not in m.surfaces:
             raise KeyError(f"unknown surface '{surface}'")
@@ -161,10 +169,7 @@ class PVBridge:
         name: str | None = None,
         set_active: bool = True,
     ) -> str:
-        """
-        Attach a pre-sliced nodal array to point_data.
-        data shape: (N,) or (N, C). N must equal ds.n_points.
-        """
+        """Attach nodal results to the dataset with appropriate structure."""
         a = np.asarray(data, dtype=np.float32)
         if a.ndim == 1:
             if a.shape[0] != ds.n_points:
@@ -214,10 +219,7 @@ class PVBridge:
         name: str | None = None,
         set_active: bool = True,
     ) -> str:
-        """
-        Attach a pre-sliced per-element array to cell_data.
-        data shape: (R,) or (R, C). R must equal ds.n_cells.
-        """
+        """Attach the provided element array to the cell data."""
         a = np.asarray(data, dtype=np.float32)
         if a.ndim == 1:
             if a.shape[0] != ds.n_cells:
@@ -267,10 +269,7 @@ class PVBridge:
         name: str | None = None,
         set_active: bool = True,
     ) -> str:
-        """
-        Attach a pre-sliced per-face array to cell_data.
-        data shape: (R,) or (R, C). R must equal ds.n_cells.
-        """
+        """Attach the provided face array to the surface or cell data."""
         a = np.asarray(data, dtype=np.float32)
         if a.ndim == 1:
             if a.shape[0] != ds.n_cells:
@@ -321,10 +320,7 @@ class PVBridge:
         name: str | None = None,
         set_active: bool = True,
     ) -> str:
-        """
-        Reduce a pre-packed per-element-node array into one value per element,
-        then attach to cell_data.
-        """
+        """Reduce node-wise element arrays to one value per cell then attach."""
         blk = np.asarray(data, dtype=np.float32)
         if blk.ndim == 2:
             blk = blk[:, :, None]
@@ -403,9 +399,6 @@ class PVBridge:
     # ---------- region vectors (array provided) ----------
 
     def region_series_array(self, *, data: np.ndarray) -> np.ndarray:
-        """
-        Pass-through helper for pre-sliced region vectors over time.
-        Ensures float32 and 2D shape (T, Csel).
-        """
+        """Normalize region time series data to float32 arrays."""
         a = np.asarray(data, dtype=np.float32)
         return a.reshape(a.shape[0], -1)

@@ -1,3 +1,5 @@
+"""Manage the JSONL-backed registry of optimization runs."""
+
 from __future__ import annotations
 
 import json
@@ -17,11 +19,10 @@ class ActiveRunDeletionError(RuntimeError):
 
 
 class RunRegistry:
-    """
-    Thread-safe registry storing optimisation run snapshots backed by a JSONL file.
-    """
+    """Thread-safe registry storing optimization run snapshots backed by JSONL."""
 
     def __init__(self, db_path: Path, *, max_history: Optional[int] = None):
+        """Initialize the registry with the backing database path."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -30,16 +31,19 @@ class RunRegistry:
         self._load()
 
     def list_runs(self) -> List[OptimizationRun]:
+        """Return all tracked optimization runs."""
         with self._lock:
             return [run for run in self._runs.values()]
 
     def get_run(self, run_id: str) -> Optional[OptimizationRun]:
+        """Return the run snapshot for the given identifier."""
         with self._lock:
             return self._runs.get(run_id)
 
     def apply_event(
         self, run_id: str, event: str, payload: Dict[str, object], ts: float
     ) -> None:
+        """Incorporate an incoming event into the relevant run."""
         with self._lock:
             run = self._runs.get(run_id)
             if run is None:
@@ -53,9 +57,11 @@ class RunRegistry:
             self._sync_locked()
 
     def refresh(self) -> None:
+        """Reload the registry contents from disk."""
         self._load()
 
     def delete_run(self, run_id: str) -> bool:
+        """Remove a finished run if it is safe to delete."""
         with self._lock:
             run = self._runs.get(run_id)
             if run is None:
@@ -68,6 +74,7 @@ class RunRegistry:
         return False
 
     def clear(self) -> List[str]:
+        """Drop all deletable runs while listing those that remain."""
         with self._lock:
             protected: List[str] = []
             removable = []
@@ -84,6 +91,7 @@ class RunRegistry:
             return protected
 
     def _load(self) -> None:
+        """Load registry entries from the JSONL file on disk."""
         if not self.db_path.exists():
             return
         try:
@@ -105,6 +113,7 @@ class RunRegistry:
             self._runs = runs
 
     def _sync_locked(self) -> None:
+        """Persist the current cache to disk while holding the lock."""
         tmp_path = self.db_path.with_suffix(".tmp")
         try:
             with tmp_path.open("w", encoding="utf-8") as fh:

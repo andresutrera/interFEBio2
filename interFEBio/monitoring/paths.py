@@ -1,3 +1,5 @@
+"""Helpers to resolve default directories used by the monitoring components."""
+
 from __future__ import annotations
 
 import os
@@ -6,11 +8,13 @@ from typing import Optional
 
 
 def _ensure_dir(path: Path) -> Path:
+    """Create the directory tree if it does not exist."""
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _first_writable(candidates: list[Path]) -> Optional[Path]:
+    """Return the first path that can be created for writing."""
     for candidate in candidates:
         try:
             candidate = candidate.expanduser()
@@ -22,6 +26,7 @@ def _first_writable(candidates: list[Path]) -> Optional[Path]:
 
 
 def default_runtime_dir() -> Path:
+    """Resolve the directory used for runtime sockets and locks."""
     env = os.environ.get("INTERFEBIO_MONITOR_RUNTIME")
     if env:
         return _ensure_dir(Path(env).expanduser())
@@ -37,6 +42,7 @@ def default_runtime_dir() -> Path:
 
 
 def default_data_dir() -> Path:
+    """Determine the directory for persistent monitoring data."""
     env = os.environ.get("INTERFEBIO_MONITOR_DATA")
     if env:
         return _ensure_dir(Path(env).expanduser())
@@ -52,10 +58,12 @@ def default_data_dir() -> Path:
 
 
 def default_socket_path() -> Path:
+    """Return the default UNIX socket path for the monitor."""
     return default_runtime_dir() / "monitor.sock"
 
 
 def default_registry_path() -> Path:
+    """Return the default path where completed runs are listed."""
     return default_data_dir() / "runs.jsonl"
 
 

@@ -1,3 +1,5 @@
+"""Utility for reading FEBio PLT tags via a memory-mapped file."""
+
 from __future__ import annotations
 
 import mmap
@@ -46,13 +48,16 @@ class BinaryReader:
     # ------------- low-level cursor ops -------------
 
     def _ensure(self, n: int) -> None:
+        """Ensure the cursor can advance without overrunning the file."""
         if self.pos + n > self.filesize:
             raise EOFError("read past end of file")
 
     def tell(self) -> int:
+        """Return the current cursor position."""
         return self.pos
 
     def seek(self, offset: int, whence: int = os.SEEK_SET) -> None:
+        """Move the cursor according to the requested offset."""
         if whence == os.SEEK_SET:
             np = offset
         elif whence == os.SEEK_CUR:
@@ -66,6 +71,7 @@ class BinaryReader:
         self.pos = np
 
     def skip(self, n: int) -> None:
+        """Advance the cursor by the requested number of bytes."""
         self._ensure(n)
         self.pos += n
 
@@ -91,6 +97,7 @@ class BinaryReader:
         return int(struct.unpack_from("<I", self._buf, self.pos)[0])
 
     def read_f32(self) -> float:
+        """Read a little-endian float32 from the buffer."""
         self._ensure(4)
         val = struct.unpack_from("<f", self._buf, self.pos)[0]
         self.pos += 4
@@ -99,6 +106,7 @@ class BinaryReader:
     # ------------- tag helpers -------------
 
     def _tagcode(self, BLOCK_TAG: str) -> int:
+        """Look up the integer code for the given tag string."""
         try:
             return self._tag2int[BLOCK_TAG]
         except KeyError:
@@ -167,6 +175,7 @@ class BinaryReader:
     # ------------- lifecycle -------------
 
     def close(self) -> None:
+        """Release resources held by the reader."""
         try:
             self._buf.release()
         except Exception:
@@ -177,6 +186,7 @@ class BinaryReader:
             self._f.close()
 
     def __del__(self) -> None:
+        """Attempt a clean shutdown when the reader is garbage collected."""
         try:
             self.close()
         except Exception:

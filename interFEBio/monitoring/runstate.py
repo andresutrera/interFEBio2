@@ -1,3 +1,5 @@
+"""Represent optimization runs and iteration histories for the monitor."""
+
 from __future__ import annotations
 
 import time
@@ -7,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class IterationRecord:
+    """Record metrics for a single optimizer iteration."""
     index: int
     cost: float
     theta: Dict[str, float]
@@ -15,6 +18,7 @@ class IterationRecord:
     series: Optional[Dict[str, Dict[str, List[float]]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize the iteration record into JSON-friendly form."""
         payload = asdict(self)
         payload["timestamp"] = float(self.timestamp)
         return payload
@@ -22,6 +26,7 @@ class IterationRecord:
 
 @dataclass
 class OptimizationRun:
+    """Track the lifecycle and metadata of an optimization run."""
     run_id: str
     label: str
     status: str = "created"
@@ -32,6 +37,7 @@ class OptimizationRun:
     iterations: List[IterationRecord] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize the run along with its metadata."""
         return {
             "run_id": self.run_id,
             "label": self.label,
@@ -45,6 +51,7 @@ class OptimizationRun:
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "OptimizationRun":
+        """Rebuild a run snapshot from the persisted dictionary."""
         iterations = [
             IterationRecord(
                 index=int(item.get("index", 0)),
@@ -68,6 +75,7 @@ class OptimizationRun:
         )
 
     def apply_event(self, event: str, payload: Dict[str, Any], ts: float) -> None:
+        """Update the run metadata based on the incoming event."""
         self.updated_at = float(ts)
         if event == "run_started":
             self.status = "running"
@@ -159,10 +167,12 @@ class OptimizationRun:
 
 
 def _is_number(value: Any) -> bool:
+    """Quick check for primitive numeric values."""
     return isinstance(value, (int, float))
 
 
 def _sanitize_series_payload(raw: Any) -> Dict[str, Dict[str, List[float]]]:
+    """Normalize any series payload into numeric sequences."""
     cleaned: Dict[str, Dict[str, List[float]]] = {}
     if not isinstance(raw, dict):
         return cleaned

@@ -1,3 +1,5 @@
+"""Emit optimization lifecycle events to a monitoring service."""
+
 from __future__ import annotations
 
 import time
@@ -11,12 +13,14 @@ from .paths import default_socket_path
 
 
 def _slug(value: str) -> str:
+    """Sanitize labels for use in run identifiers."""
     return "".join(ch for ch in value if ch.isalnum() or ch in ("-", "_")).strip("_") or "run"
 
 
 def _sanitize_series(
     series: Mapping[str, Mapping[str, Any]] | None
 ) -> Dict[str, Dict[str, list[float]]]:
+    """Normalize optional series data so each field is numeric."""
     cleaned: Dict[str, Dict[str, list[float]]] = {}
     if not series:
         return cleaned
@@ -39,6 +43,7 @@ def _sanitize_series(
 
 
 def generate_run_id(label: str | None = None) -> str:
+    """Produce a fresh run identifier using the provided label."""
     prefix = _slug(label or "run")
     suffix = uuid.uuid4().hex[:12]
     return f"{prefix}-{suffix}"
@@ -46,17 +51,17 @@ def generate_run_id(label: str | None = None) -> str:
 
 @dataclass
 class MonitorConfig:
+    """Hold options for the optimization monitoring client."""
     socket_path: Optional[Path] = None
     run_id: Optional[str] = None
     label: Optional[str] = None
 
 
 class OptimizationMonitorClient:
-    """
-    Helper that emits optimisation lifecycle events to the monitor service.
-    """
+    """Emit optimization lifecycle events to the monitor service."""
 
     def __init__(self, config: MonitorConfig | None = None):
+        """Initialize the emitter and run metadata."""
         if config is None:
             config = MonitorConfig()
         socket_path = config.socket_path or default_socket_path()
@@ -74,6 +79,7 @@ class OptimizationMonitorClient:
         optimizer: Mapping[str, Any] | None = None,
         meta: Mapping[str, Any] | None = None,
     ) -> None:
+        """Emit the run started event."""
         payload: Dict[str, Any] = {
             "label": self.label,
             "parameters": dict(parameters or {}),
@@ -95,6 +101,7 @@ class OptimizationMonitorClient:
         metrics: Mapping[str, Any] | None = None,
         series: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
+        """Emit iteration progress with metrics and series data."""
         payload: Dict[str, Any] = {
             "index": int(index),
             "cost": float(cost),
@@ -114,6 +121,7 @@ class OptimizationMonitorClient:
         summary: Mapping[str, Any] | None = None,
         exit_code: Optional[int] = None,
     ) -> None:
+        """Announce the completed run with optional summary."""
         payload: Dict[str, Any] = {}
         if best_cost is not None:
             payload["best_cost"] = float(best_cost)
@@ -124,15 +132,18 @@ class OptimizationMonitorClient:
         self._emit("run_completed", payload)
 
     def run_failed(self, *, reason: str, exit_code: Optional[int] = None) -> None:
+        """Notify the monitor of a failed run."""
         payload: Dict[str, Any] = {"reason": reason}
         if exit_code is not None:
             payload["exit_code"] = exit_code
         self._emit("run_failed", payload)
 
     def emit_meta(self, meta: Mapping[str, Any]) -> None:
+        """Send additional metadata to the monitor."""
         self._emit("meta", dict(meta))
 
     def _emit(self, event: str, payload: Dict[str, Any]) -> None:
+        """Forward the event payload through the emitter."""
         try:
             self._emitter.emit(self.run_id, event, payload)
         except Exception:

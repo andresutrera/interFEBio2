@@ -1,3 +1,5 @@
+"""CLI helpers for installing and running the monitoring service."""
+
 from __future__ import annotations
 
 import argparse
@@ -27,6 +29,7 @@ WantedBy=default.target
 
 
 def ensure_dependencies() -> None:
+    """Ensure the optional monitoring stack is available."""
     try:
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
@@ -38,6 +41,7 @@ def ensure_dependencies() -> None:
 
 
 def run_service(*, registry: Path | None = None, socket: Path | None = None) -> int:
+    """Start the monitoring web service with the given overrides."""
     ensure_dependencies()
     from .webapp import main as web_main
 
@@ -55,6 +59,7 @@ def run_service(*, registry: Path | None = None, socket: Path | None = None) -> 
 
 
 def install_service(*, user: bool = True, force: bool = False) -> None:
+    """Install the systemd unit for the monitoring service."""
     ensure_dependencies()
     unit_content = UNIT_TEMPLATE.format(
         python=sys.executable,
@@ -77,6 +82,7 @@ def install_service(*, user: bool = True, force: bool = False) -> None:
 
 
 def uninstall_service(*, user: bool = True) -> None:
+    """Disable and remove the monitoring systemd unit."""
     unit_path = (
         Path.home() / ".config/systemd/user/interfebio-monitor.service"
         if user
@@ -91,6 +97,7 @@ def uninstall_service(*, user: bool = True) -> None:
 
 
 def _systemctl(args: list[str], *, user: bool, check: bool = True) -> None:
+    """Wrapper around systemctl invocation used by the install scripts."""
     executable = shutil.which("systemctl")
     if executable is None:
         raise RuntimeError("systemctl executable not found in PATH")
@@ -104,6 +111,7 @@ def _systemctl(args: list[str], *, user: bool, check: bool = True) -> None:
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    """Parse the CLI arguments for the monitoring helper."""
     parser = argparse.ArgumentParser(description="interFEBio monitoring service helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -124,6 +132,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    """Dispatch commands from the monitoring helper CLI."""
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     if args.command == "run":

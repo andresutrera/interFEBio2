@@ -1,7 +1,10 @@
+"""FEBio PLT-related enums for data types and tags."""
+
 from enum import Enum, IntEnum, auto
 
 
 class FEDataType(IntEnum):
+    """Enumerate the storage formats for FEBio result data."""
     FLOAT = 0  # // scalar             : single fp
     VEC3F = auto()  # // 3D vector          : 3 fps
     MAT3FS = auto()  # // symm 2o tensor     : 6 fps
@@ -13,6 +16,7 @@ class FEDataType(IntEnum):
 
 
 class FEDataDim(IntEnum):
+    """Map FEBio data types to their component counts."""
     FLOAT = 1
     VEC3F = 3
     MAT3FS = 6
@@ -24,6 +28,7 @@ class FEDataDim(IntEnum):
 
 
 class Storage_Fmt(IntEnum):
+    """Identify the kind of PLT storage block."""
     FMT_NODE = 0
     FMT_ITEM = auto()
     FMT_MULT = auto()
@@ -32,6 +37,7 @@ class Storage_Fmt(IntEnum):
 
 
 class Elem_Type(IntEnum):
+    """Enumerate FEBio element type identifiers."""
     ELEM_HEX = 0
     ELEM_PENTA = auto()
     ELEM_TET4 = auto()
@@ -54,6 +60,7 @@ class Elem_Type(IntEnum):
 
 
 class nodesPerElementClass(IntEnum):
+    """Define the node count per FEBio element class."""
     ELEM_HEX = 8
     ELEM_PENTA = 6
     ELEM_TET4 = 4
@@ -76,6 +83,7 @@ class nodesPerElementClass(IntEnum):
 
 
 class tags(Enum):
+    """PLT tag constants that name key sections and data items."""
     PLT_VERSION = "0x0031"
     PLT_ROOT = "0x01000000"
     PLT_HEADER = "0x01010000"
