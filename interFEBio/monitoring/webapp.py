@@ -6,7 +6,7 @@ import argparse
 import logging
 import textwrap
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -147,7 +147,7 @@ HOME_BODY = textwrap.dedent(
                 <th>Run</th>
                 <th>Status</th>
                 <th>Iterations</th>
-                <th>Best Cost</th>
+                <th>Last Cost</th>
                 <th>Updated</th>
                 <th>Actions</th>
               </tr>
@@ -357,13 +357,13 @@ HOME_BODY = textwrap.dedent(
                 .map(run => {
                   const status = run.status || 'unknown';
                   const label = run.label || run.run_id;
-                  const best = typeof run.best_cost === 'number' ? run.best_cost.toExponential(3) : '-';
+                  const last = typeof run.last_cost === 'number' ? run.last_cost.toExponential(3) : '-';
                   const updated = run.updated_at ? new Date(run.updated_at * 1000).toLocaleTimeString() : '-';
                   return `<tr data-run="${run.run_id}">
                     <td><a href="#" data-run="${run.run_id}">${label}</a></td>
                     <td class="status ${status}">${status}</td>
                     <td>${run.iteration_count}</td>
-                    <td>${best}</td>
+                    <td>${last}</td>
                     <td>${updated}</td>
                     <td><button class="deleteBtn" data-run="${run.run_id}">Delete</button></td>
                   </tr>`;
@@ -460,9 +460,6 @@ HOME_BODY = textwrap.dedent(
             statusValue += `<span class="status-reason">${escapeHtml(failureReason)}</span>`;
           }
           summary.push({ label: 'Status', value: statusValue });
-          if (typeof meta.best_cost === 'number') {
-            summary.push({ label: 'Best cost', value: meta.best_cost.toExponential(4) });
-          }
           if (typeof meta.last_cost === 'number') {
             summary.push({ label: 'Last cost', value: meta.last_cost.toExponential(4) });
           }
@@ -907,7 +904,6 @@ def create_app(
                     "status": run.status,
                     "created_at": run.created_at,
                     "updated_at": run.updated_at,
-                    "best_cost": meta.get("best_cost"),
                     "last_cost": meta.get("last_cost"),
                     "iteration_count": len(run.iterations),
                     "optimizer": meta.get("optimizer"),
@@ -971,11 +967,10 @@ def create_app(
         """Render the dashboard HTML."""
         return HTMLResponse(_render_home_page())
 
-
     return app
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse CLI arguments for the monitoring web app."""
     parser = argparse.ArgumentParser(description="interFEBio monitoring service")
     parser.add_argument(
@@ -1027,7 +1022,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     """Run the monitoring web app CLI using parsed options."""
     import uvicorn
 
-    args = parse_args(argv)
+    args = parse_args(list(argv) if argv is not None else None)
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

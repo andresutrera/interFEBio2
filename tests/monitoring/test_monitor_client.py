@@ -32,7 +32,7 @@ def test_monitor_client_emits_expected_payloads(tmp_path):
         theta={"a": 1.5},
         metrics={"nrmse": 0.2},
     )
-    client.run_completed(best_cost=2.5, summary={"nrmse": 0.2})
+    client.run_completed(summary={"nrmse": 0.2})
 
     assert len(collector.records) == 3
     run_id = collector.records[0][0]
@@ -41,4 +41,4 @@ def test_monitor_client_emits_expected_payloads(tmp_path):
     assert collector.records[1][1] == "iteration"
     assert collector.records[1][2]["theta"]["a"] == 1.5
     assert collector.records[2][1] == "run_completed"
-    assert collector.records[2][2]["best_cost"] == 2.5
+    assert collector.records[2][2]["summary"]["nrmse"] == 0.2

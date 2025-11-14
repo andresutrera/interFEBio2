@@ -176,8 +176,6 @@ class Engine:
         self._progress_index = 0
         self._eval_index = 0
         self._iter_dirs: List[Path] = []
-        self._best_iter_dir: Path | None = None
-        self._best_cost: float | None = None
         self._last_phi: Array | None = None
         self._last_theta_vec: Array | None = None
         self._last_residual: Array | None = None
@@ -219,8 +217,6 @@ class Engine:
             self._progress_index = 0
             self._eval_index = 0
             self._iter_dirs = []
-            self._best_iter_dir = None
-            self._best_cost = None
             self._last_phi = None
             self._last_theta_vec = None
             self._last_residual = None
@@ -280,10 +276,7 @@ class Engine:
             if monitor_client is not None:
                 try:
                     summary = self._build_run_summary(theta_opt, meta)
-                    monitor_client.run_completed(
-                        best_cost=self._best_cost,
-                        summary=summary,
-                    )
+                    monitor_client.run_completed(summary=summary)
                 except Exception:
                     self._logger.exception("Failed to emit monitor completion event.")
             try:
@@ -610,10 +603,6 @@ class Engine:
                 except Exception:
                     self._logger.exception("Failed to emit monitor iteration event.")
             self._progress_index += 1
-            if self._last_iter_dir is not None:
-                if self._best_cost is None or cost <= self._best_cost:
-                    self._best_cost = cost
-                    self._best_iter_dir = self._last_iter_dir
             self._cleanup_previous_iterations()
 
         return callback
@@ -830,8 +819,6 @@ class Engine:
         keep: Set[Path] = set()
         if self._last_iter_dir is not None:
             keep.add(self._last_iter_dir.resolve())
-        if self._best_iter_dir is not None:
-            keep.add(self._best_iter_dir.resolve())
         retained: List[Path] = []
         for dir_path in self._iter_dirs:
             resolved = dir_path.resolve()
@@ -854,11 +841,10 @@ class Engine:
             return
         keep_paths: Set[Path] = set()
         if mode == "retain_best":
-            candidate = self._best_iter_dir or self._last_iter_dir
-            if candidate is not None:
-                keep_paths.add(candidate.resolve())
-            else:
+            candidate = self._last_iter_dir
+            if candidate is None:
                 return
+            keep_paths.add(candidate.resolve())
         self.storage.cleanup_all(keep_paths if keep_paths else None)
         if keep_paths:
             keep_resolved = {p.resolve() for p in keep_paths}
@@ -869,8 +855,8 @@ class Engine:
             self._iter_dirs = []
 
     def _persist_best(self) -> None:
-        """Copy the best iteration directory to the persistent root."""
-        best_dir = self._best_iter_dir or self._last_iter_dir
+        """Copy the last iteration directory to the persistent root."""
+        best_dir = self._last_iter_dir
         if best_dir is None:
             return
         best_dir = best_dir.resolve()

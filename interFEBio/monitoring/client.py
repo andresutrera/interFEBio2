@@ -117,14 +117,11 @@ class OptimizationMonitorClient:
     def run_completed(
         self,
         *,
-        best_cost: Optional[float] = None,
         summary: Mapping[str, Any] | None = None,
         exit_code: Optional[int] = None,
     ) -> None:
         """Announce the completed run with optional summary."""
         payload: Dict[str, Any] = {}
-        if best_cost is not None:
-            payload["best_cost"] = float(best_cost)
         if summary:
             payload["summary"] = dict(summary)
         if exit_code is not None:

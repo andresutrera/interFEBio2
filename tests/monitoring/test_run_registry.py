@@ -35,7 +35,7 @@ def test_run_registry_persists_events(tmp_path):
     registry.apply_event(
         "demo-run",
         "run_completed",
-        {"best_cost": 1.0, "summary": {"nrmse": 0.1}},
+        {"summary": {"nrmse": 0.1}},
         ts + 2,
     )
 
@@ -44,7 +44,7 @@ def test_run_registry_persists_events(tmp_path):
     assert run is not None
     assert run.label == "Demo Run"
     assert run.status == "finished"
-    assert run.meta["best_cost"] == 1.0
+    assert run.meta["last_cost"] == 1.23
     assert len(run.iterations) == 1
     iteration = run.iterations[0]
     assert iteration.index == 0

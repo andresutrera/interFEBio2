@@ -130,9 +130,6 @@ class OptimizationRun:
                 series=series_clean or None,
             )
             self.iterations.append(record)
-            best = self.meta.get("best_cost")
-            if best is None or cost <= best:
-                self.meta["best_cost"] = cost
             self.meta["last_cost"] = cost
             r_sq = metrics.get("r_squared")
             if isinstance(r_sq, dict):
@@ -145,9 +142,6 @@ class OptimizationRun:
             summary = payload.get("summary")
             if isinstance(summary, dict):
                 self.meta["summary"] = summary
-            best_cost = payload.get("best_cost")
-            if best_cost is not None and _is_number(best_cost):
-                self.meta["best_cost"] = float(best_cost)
             exit_code = payload.get("exit_code")
             if exit_code is not None:
                 self.meta["exit_code"] = exit_code
