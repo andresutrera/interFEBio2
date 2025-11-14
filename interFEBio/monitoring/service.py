@@ -19,7 +19,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart={python} -m interFEBio.monitoring.service run --registry {registry} --socket {socket}
+ExecStart={python} -m interFEBio.monitoring.service run --registry {registry} --socket {socket} --host {host} --port {port}
 Restart=on-failure
 RestartSec=2
 
@@ -40,31 +40,47 @@ def ensure_dependencies() -> None:
         ) from exc
 
 
-def run_service(*, registry: Path | None = None, socket: Path | None = None) -> int:
+def run_service(
+    *,
+    registry: Path | None = None,
+    socket: Path | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> int:
     """Start the monitoring web service with the given overrides."""
     ensure_dependencies()
     from .webapp import main as web_main
 
+    resolved_host = host or "127.0.0.1"
+    resolved_port = str(port or 8765)
     args = [
         "--registry",
         str(registry or default_registry_path()),
         "--event-socket",
         str(socket or default_socket_path()),
         "--host",
-        "127.0.0.1",
+        resolved_host,
         "--port",
-        "8765",
+        resolved_port,
     ]
     return web_main(args)
 
 
-def install_service(*, user: bool = True, force: bool = False) -> None:
+def install_service(
+    *,
+    user: bool = True,
+    force: bool = False,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+) -> None:
     """Install the systemd unit for the monitoring service."""
     ensure_dependencies()
     unit_content = UNIT_TEMPLATE.format(
         python=sys.executable,
         registry=default_registry_path(),
         socket=default_socket_path(),
+        host=host,
+        port=port,
     )
     if user:
         unit_dir = Path.home() / ".config/systemd/user"
@@ -120,10 +136,14 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     install_parser = subparsers.add_parser("install", help="Install and enable the systemd unit")
     install_parser.add_argument("--system", action="store_true", help="Install system-wide (requires root)")
     install_parser.add_argument("--force", action="store_true", help="Overwrite existing unit")
+    install_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind the web UI (default: 127.0.0.1)")
+    install_parser.add_argument("--port", type=int, default=8765, help="Port to bind the web UI (default: 8765)")
 
     run_parser = subparsers.choices["run"]
     run_parser.add_argument("--registry", type=Path, default=None, help="Registry path override")
     run_parser.add_argument("--socket", type=Path, default=None, help="Event socket override")
+    run_parser.add_argument("--host", type=str, default=None, help="Host override for the web UI")
+    run_parser.add_argument("--port", type=int, default=None, help="Port override for the web UI")
 
     uninstall_parser = subparsers.add_parser("uninstall", help="Disable and remove the systemd unit")
     uninstall_parser.add_argument("--system", action="store_true", help="Remove system-wide unit")
@@ -136,9 +156,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     if args.command == "run":
-        return run_service(registry=args.registry, socket=args.socket)
+        return run_service(
+            registry=args.registry,
+            socket=args.socket,
+            host=args.host,
+            port=args.port,
+        )
     if args.command == "install":
-        install_service(user=not args.system, force=args.force)
+        install_service(
+            user=not args.system,
+            force=args.force,
+            host=args.host,
+            port=args.port,
+        )
         return 0
     if args.command == "uninstall":
         uninstall_service(user=not args.system)
