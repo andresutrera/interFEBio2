@@ -13,6 +13,15 @@ def test_aligner_linear():
     np.testing.assert_allclose(out, np.array([1.0, 3.0]))
 
 
+def test_aligner_handles_column_vectors():
+    aligner = Aligner()
+    x_src = np.array([[0.0], [1.0], [2.0]])
+    y_src = np.array([[0.0], [2.0], [4.0]])
+    x_tgt = np.array([[0.5], [1.5]])
+    out = aligner.map(x_src, y_src, x_tgt)
+    np.testing.assert_allclose(out, np.array([1.0, 3.0]))
+
+
 def test_residual_assembler():
     grid = EvaluationGrid(policy="exp_to_sim")
     assembler = ResidualAssembler(grid)
@@ -32,3 +41,97 @@ def test_residual_assembler():
     residual, slices = assembler.assemble(experiments, simulations)
     np.testing.assert_allclose(residual, np.array([0.0, 0.5, 1.0]))
     assert "exp1" in slices
+
+
+def test_sim_to_exp_grid_clips_to_sim_domain():
+    grid = EvaluationGrid(policy="sim_to_exp")
+    assembler = ResidualAssembler(grid)
+    experiments = {
+        "exp": (
+            np.array([0.0, 0.5, 1.0, 1.5]),
+            np.array([0.0, 0.5, 1.0, 1.5]),
+            None,
+        )
+    }
+    simulations = {
+        "exp": (
+            np.array([0.0, 0.5, 1.0]),
+            np.array([0.0, 1.0, 2.0]),
+        )
+    }
+    residuals, _, details = assembler.assemble_with_details(experiments, simulations)
+    np.testing.assert_allclose(details["exp"]["grid"], np.array([0.0, 0.5, 1.0]))
+    assert residuals.shape[0] == 3
+
+
+def test_exp_to_sim_grid_clips_to_exp_domain():
+    grid = EvaluationGrid(policy="exp_to_sim")
+    assembler = ResidualAssembler(grid)
+    experiments = {
+        "exp": (
+            np.array([0.0, 0.5, 1.0]),
+            np.array([0.0, 0.5, 1.0]),
+            None,
+        )
+    }
+    simulations = {
+        "exp": (
+            np.array([0.0, 0.5, 1.0, 1.5]),
+            np.array([0.0, 1.0, 2.0, 3.0]),
+        )
+    }
+    residuals, _, details = assembler.assemble_with_details(experiments, simulations)
+    np.testing.assert_allclose(details["exp"]["grid"], np.array([0.0, 0.5, 1.0]))
+    assert residuals.shape[0] == 3
+
+
+def test_residual_assembler_target_override():
+    grid = EvaluationGrid(policy="sim_to_exp")
+    assembler = ResidualAssembler(grid)
+    experiments = {
+        "exp": (
+            np.array([0.0, 0.4, 0.8, 1.2]),
+            np.array([0.0, 0.2, 0.4, 0.6]),
+            None,
+        )
+    }
+    simulations = {
+        "exp": (
+            np.array([0.0, 0.25, 0.5]),
+            np.array([0.0, 0.5, 1.0]),
+        )
+    }
+    target = np.linspace(0.0, 1.2, 5)
+    residuals, _, details = assembler.assemble_with_details(
+        experiments,
+        simulations,
+        target_grids={"exp": target},
+    )
+    np.testing.assert_allclose(details["exp"]["grid"], target)
+    assert residuals.shape[0] == target.size
+
+
+def test_residual_assembler_override_skips_clipping():
+    grid = EvaluationGrid(policy="sim_to_exp")
+    assembler = ResidualAssembler(grid)
+    experiments = {
+        "exp": (
+            np.linspace(0.0, 2.0, 5),
+            np.linspace(0.0, 1.0, 5),
+            None,
+        )
+    }
+    simulations = {
+        "exp": (
+            np.array([0.0, 0.2, 0.4]),
+            np.array([0.0, 0.4, 0.8]),
+        )
+    }
+    target = np.linspace(0.0, 2.0, 8)
+    residuals, _, details = assembler.assemble_with_details(
+        experiments,
+        simulations,
+        target_grids={"exp": target},
+    )
+    np.testing.assert_allclose(details["exp"]["grid"], target)
+    assert residuals.shape[0] == target.size

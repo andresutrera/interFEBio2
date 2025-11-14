@@ -71,11 +71,15 @@ class Aligner:
         Returns:
             Interpolated ordinate values on ``x_tgt``.
         """
-        x_src = cast(Array, np.asarray(x_src, dtype=float))
-        y_src = cast(Array, np.asarray(y_src, dtype=float))
-        x_tgt = cast(Array, np.asarray(x_tgt, dtype=float))
+        x_src = cast(Array, np.asarray(x_src, dtype=float).reshape(-1))
+        y_src = cast(Array, np.asarray(y_src, dtype=float).reshape(-1))
+        x_tgt = cast(Array, np.asarray(x_tgt, dtype=float).reshape(-1))
         if x_src.size == 0:
             return cast(Array, np.full_like(x_tgt, self.fill_value))
+        if x_src.shape != y_src.shape:
+            raise ValueError(
+                f"x and y must have the same length; got {x_src.shape} and {y_src.shape}"
+            )
         if self.kind == "nearest":
             indices = np.searchsorted(x_src, x_tgt, side="left")
             indices = np.clip(indices, 0, len(x_src) - 1)

@@ -42,17 +42,33 @@ class ResidualAssembler:
         self,
         experiments: Dict[str, tuple[Array, Array, Array | None]],
         simulations: Dict[str, tuple[Array, Array]],
+        *,
+        target_grids: Dict[str, Array] | None = None,
     ) -> tuple[Array, Dict[str, slice]]:
         """Return concatenated residuals and slice metadata."""
-        residuals, slices, _ = self.assemble_with_details(experiments, simulations)
+        residuals, slices, _ = self.assemble_with_details(
+            experiments,
+            simulations,
+            target_grids=target_grids,
+        )
         return residuals, slices
 
     def assemble_with_details(
         self,
         experiments: Dict[str, tuple[Array, Array, Array | None]],
         simulations: Dict[str, tuple[Array, Array]],
+        *,
+        target_grids: Dict[str, Array] | None = None,
     ) -> tuple[Array, Dict[str, slice], Dict[str, Dict[str, Array | None]]]:
-        """Return residuals together with per-experiment alignment details."""
+        """Return residuals together with per-experiment alignment details.
+
+        Args:
+            experiments: Experimental data per identifier.
+            simulations: Simulation outputs per identifier.
+            target_grids: Optional mapping overriding the evaluation grid per
+                experiment. When provided the clip-to-overlap step is skipped
+                and the supplied grid is used verbatim.
+        """
         residuals: List[Array] = []
         slices: Dict[str, slice] = {}
         details: Dict[str, Dict[str, Array | None]] = {}
@@ -63,7 +79,16 @@ class ResidualAssembler:
                 continue
 
             x_sim, y_sim = sim
-            target = self.grid.select_grid(x_exp, x_sim)
+            target_override = None
+            if target_grids is not None:
+                target_override = target_grids.get(name)
+            if target_override is not None:
+                target = cast(
+                    Array, np.asarray(target_override, dtype=float).reshape(-1)
+                )
+            else:
+                target = self.grid.select_grid(x_exp, x_sim)
+                target = self._clip_target(target, x_exp, x_sim)
             y_exp_interp = self.aligner.map(x_exp, y_exp, target)
             y_sim_interp = self.aligner.map(x_sim, y_sim, target)
             delta = y_sim_interp - y_exp_interp
@@ -97,6 +122,21 @@ class ResidualAssembler:
             empty = cast(Array, np.array([], dtype=float))
             return empty, {}, {}
         return cast(Array, np.concatenate(residuals)), slices, details
+
+    def _clip_target(self, target: Array, x_exp: Array, x_sim: Array) -> Array:
+        """Restrict target grid to overlap between experimental and simulation domains."""
+        if target.size == 0 or self.grid.policy == "fixed_user":
+            return target
+        if x_exp.size == 0 or x_sim.size == 0:
+            return target
+        lo = max(float(np.min(x_exp)), float(np.min(x_sim)))
+        hi = min(float(np.max(x_exp)), float(np.max(x_sim)))
+        if lo > hi:
+            return target
+        mask = (target >= lo) & (target <= hi)
+        if not np.any(mask):
+            return target
+        return cast(Array, np.asarray(target[mask], dtype=float))
 
 
 __all__ = ["ResidualAssembler"]

@@ -79,3 +79,21 @@ def test_run_registry_blocks_active_deletion(tmp_path):
     protected = registry.clear()
     assert protected == ["run-active"]
     assert registry.get_run("run-active") is not None
+    assert registry.delete_run("run-active", force=True) is True
+    assert registry.get_run("run-active") is None
+
+
+def test_run_registry_clear_force(tmp_path):
+    db_path = tmp_path / "runs.jsonl"
+    registry = RunRegistry(db_path)
+    registry.apply_event("run-active", "run_started", {}, time.time())
+    registry.apply_event("run-finished", "run_started", {}, time.time())
+    registry.apply_event("run-finished", "run_completed", {}, time.time())
+    protected = registry.clear()
+    assert protected == ["run-active"]
+    registry.apply_event("run-active-2", "run_started", {}, time.time())
+    remaining = {run.run_id for run in registry.list_runs()}
+    assert remaining == {"run-active", "run-active-2"}
+    protected = registry.clear(force=True)
+    assert protected == []
+    assert registry.list_runs() == []

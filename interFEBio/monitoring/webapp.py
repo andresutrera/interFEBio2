@@ -765,7 +765,7 @@ HOME_BODY = textwrap.dedent(
           });
         }
         document.getElementById('refresh').addEventListener('click', () => loadRuns());
-        document.getElementById('deleteAll').addEventListener('click', deleteAllRuns);
+        document.getElementById('deleteAll').addEventListener('click', () => deleteAllRuns());
         closeDetailBtn.addEventListener('click', () => {
           closeDetail();
         });
@@ -781,15 +781,26 @@ HOME_BODY = textwrap.dedent(
           }
         });
 
-        async function deleteRun(runId) {
-          if (!confirm(`Delete run ${runId}?`)) {
-            return;
+        async function deleteRun(runId, force = false, skipConfirm = false) {
+          if (!skipConfirm) {
+            const msg = force
+              ? `Force delete run ${runId}? Only use this if the monitor cannot determine its state.`
+              : `Delete run ${runId}?`;
+            if (!confirm(msg)) {
+              return;
+            }
           }
           try {
-            const res = await fetch(`/api/runs/${runId}`, { method: 'DELETE' });
-            if (res.status === 409) {
+            const endpoint = force ? `/api/runs/${runId}?force=1` : `/api/runs/${runId}`;
+            const res = await fetch(endpoint, { method: 'DELETE' });
+            if (res.status === 409 && !force) {
               const err = await res.json().catch(() => ({}));
-              alert(err.detail || 'Run is still active and cannot be deleted.');
+              const confirmForce = confirm(
+                `${err.detail || 'Run appears to be active.'}\nForce delete ${runId}?`,
+              );
+              if (confirmForce) {
+                await deleteRun(runId, true, true);
+              }
               return;
             }
             if (!res.ok) {
@@ -807,19 +818,30 @@ HOME_BODY = textwrap.dedent(
           }
         }
 
-        async function deleteAllRuns() {
-          if (!confirm('Delete all runs? This cannot be undone.')) {
-            return;
+        async function deleteAllRuns(force = false, skipConfirm = false) {
+          if (!skipConfirm) {
+            const msg = force
+              ? 'Force delete all runs? This will also remove entries still marked as running.'
+              : 'Delete all completed runs? This cannot be undone.';
+            if (!confirm(msg)) {
+              return;
+            }
           }
           try {
-            const res = await fetch('/api/runs', { method: 'DELETE' });
+            const endpoint = force ? '/api/runs?force=1' : '/api/runs';
+            const res = await fetch(endpoint, { method: 'DELETE' });
             if (!res.ok) {
               alert('Failed to delete runs');
               return;
             }
             const data = await res.json().catch(() => ({}));
-            if (Array.isArray(data.protected) && data.protected.length) {
-              alert(`Skipped ${data.protected.length} active run(s): ${data.protected.join(', ')}`);
+            if (!force && Array.isArray(data.protected) && data.protected.length) {
+              const askForce = confirm(
+                `Skipped ${data.protected.length} active run(s): ${data.protected.join(', ')}\nForce delete them?`,
+              );
+              if (askForce) {
+                await deleteAllRuns(true, true);
+              }
             }
             closeDetail();
             await loadRuns(false);
@@ -939,10 +961,10 @@ def create_app(
         return [record.to_dict() for record in run.iterations]
 
     @app.delete("/api/runs/{run_id}")
-    async def delete_run(run_id: str):
-        """Delete a single run if it has finished."""
+    async def delete_run(run_id: str, force: bool = False):
+        """Delete a single run, optionally forcing removal."""
         try:
-            removed = registry.delete_run(run_id)
+            removed = registry.delete_run(run_id, force=force)
         except ActiveRunDeletionError:
             raise HTTPException(
                 status_code=409,
@@ -950,17 +972,22 @@ def create_app(
             ) from None
         if not removed:
             raise HTTPException(status_code=404, detail="Run not found")
-        return {"status": "deleted", "run_id": run_id}
+        return {"status": "deleted", "run_id": run_id, "forced": force}
 
     @app.delete("/api/runs")
-    async def delete_all_runs():
-        """Delete every completed run and report protected ones."""
+    async def delete_all_runs(force: bool = False):
+        """Delete runs and optionally force removal of active entries."""
         registry.refresh()
         total_before = len(registry.list_runs())
-        protected = registry.clear()
+        protected = registry.clear(force=force)
         total_after = len(registry.list_runs())
         removed = max(total_before - total_after, 0)
-        return {"status": "cleared", "removed": removed, "protected": protected}
+        return {
+            "status": "cleared",
+            "removed": removed,
+            "protected": protected,
+            "forced": force,
+        }
 
     @app.get("/", response_class=HTMLResponse)
     async def home() -> HTMLResponse:

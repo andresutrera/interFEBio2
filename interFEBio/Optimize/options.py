@@ -8,7 +8,6 @@ from typing import Any, Literal, Mapping, Sequence
 
 from .alignment import GridPolicy
 
-
 CleanupMode = Literal["none", "retain_best", "all"]
 StorageMode = Literal["disk", "tmp"]
 OptimizerName = Literal["least_squares", "minimize"]

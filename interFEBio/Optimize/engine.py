@@ -6,7 +6,18 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence, Set, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Sequence,
+    Set,
+    Tuple,
+    cast,
+)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,6 +29,7 @@ from .alignment import Aligner, EvaluationGrid, GridPolicy
 from .cases import SimulationCase
 from .jacobian import JacobianComputer
 from .optimizers import (
+    BoundsLike,
     OptimizerAdapter,
     ScipyLeastSquaresAdapter,
     ScipyMinimizeAdapter,
@@ -33,7 +45,7 @@ Array = NDArray[np.float64]
 
 def _to_list(data: Any) -> List[float]:
     array = np.asarray(data, dtype=float).reshape(-1)
-    return array.tolist()
+    return cast(List[float], array.tolist())
 
 
 @dataclass
@@ -47,6 +59,7 @@ class OptimizeResult:
 class _CaseState:
     case: SimulationCase
     experiments: Dict[str, tuple[Array, Array, Array | None]]
+    name: str
 
 
 class Engine:
@@ -70,6 +83,7 @@ class Engine:
 
         self.options = options = options or EngineOptions()
         self.parameter_space = parameter_space
+        self._param_names = list(self.parameter_space.names)
         grid_policy = options.grid.policy
         grid_values = options.grid.values
         jacobian_opts = options.jacobian
@@ -120,7 +134,9 @@ class Engine:
         if storage_mode not in {"disk", "tmp"}:
             raise ValueError("storage_mode must be 'disk' or 'tmp'")
         storage_parent = (
-            Path(storage_opts.root).expanduser() if storage_opts.root is not None else None
+            Path(storage_opts.root).expanduser()
+            if storage_opts.root is not None
+            else None
         )
         self.storage = StorageManager(
             parent=storage_parent,
@@ -159,8 +175,11 @@ class Engine:
             )
 
         self._cases: List[_CaseState] = []
+        self._case_grid_cache: Dict[str, Dict[str, Array]] = {}
+
         for case in cases:
             experiments: Dict[str, tuple[Array, Array, Array | None]] = {}
+            grid_overrides: Dict[str, Array | None] = {}
             for name, series in case.experiments.items():
                 x, y, weight = series.weighted()
                 x_arr = cast(Array, np.asarray(x, dtype=float))
@@ -171,7 +190,26 @@ class Engine:
                     else cast(Array, np.asarray(weight, dtype=float))
                 )
                 experiments[name] = (x_arr, y_arr, w_arr)
-            self._cases.append(_CaseState(case=case, experiments=experiments))
+                grid_val = series.evaluation_grid()
+                if grid_val is not None:
+                    grid_overrides[name] = cast(
+                        Array, np.asarray(grid_val, dtype=float).reshape(-1)
+                    )
+                else:
+                    grid_overrides[name] = None
+            case_name = self._resolve_case_name(case)
+            self._cases.append(
+                _CaseState(
+                    case=case,
+                    experiments=experiments,
+                    name=case_name,
+                )
+            )
+            self._case_grid_cache[case_name] = {
+                exp_name: grid
+                for exp_name, grid in grid_overrides.items()
+                if grid is not None
+            }
 
         self._progress_index = 0
         self._eval_index = 0
@@ -188,6 +226,8 @@ class Engine:
         self._monitor_label = monitor_opts.label
         self._monitor_client: OptimizationMonitorClient | None = None
         self._series_latest: Dict[str, Dict[str, Any]] = {}
+        self._cached_jac_phi: Array | None = None
+        self._cached_jacobian: Array | None = None
 
     # ------------------------------------------------------------------ public API
     def run(
@@ -236,7 +276,7 @@ class Engine:
                         self.parameter_space.theta0
                     )
                     phi0_vec = cast(Array, np.asarray(theta0_vec, dtype=float))
-            bounds_input = bounds
+            bounds_input: BoundsLike = bounds
             if bounds_input is None:
                 bounds_input = (
                     self.parameter_space.phi_bounds()
@@ -299,9 +339,7 @@ class Engine:
         except Exception as exc:
             if monitor_client is not None:
                 try:
-                    monitor_client.run_failed(
-                        reason=f"{exc.__class__.__name__}: {exc}"
-                    )
+                    monitor_client.run_failed(reason=f"{exc.__class__.__name__}: {exc}")
                 except Exception:
                     self._logger.exception("Failed to emit monitor failure event.")
             raise
@@ -357,7 +395,8 @@ class Engine:
         bounds_payload = self._serialise_bounds(bounds)
         if bounds_payload is not None:
             parameters["bounds"] = bounds_payload
-        cases = self._case_descriptors()
+        case_list = self._case_descriptors()
+        cases: List[Mapping[str, Any]] = list(case_list)
         optimizer_meta = {"adapter": type(self.optimizer_adapter).__name__}
         meta = {
             "storage_root": str(self.persist_root),
@@ -370,8 +409,8 @@ class Engine:
             meta={k: v for k, v in meta.items() if v is not None},
         )
 
-    def _case_descriptors(self) -> List[Dict[str, Any]]:
-        descriptors: List[Dict[str, Any]] = []
+    def _case_descriptors(self) -> List[Mapping[str, Any]]:
+        descriptors: List[Mapping[str, Any]] = []
         for state in self._cases:
             experiments = sorted(state.case.experiments.keys())
             entry: Dict[str, Any] = {
@@ -384,18 +423,32 @@ class Engine:
             descriptors.append(entry)
         return descriptors
 
+    def _resolve_case_name(self, case: SimulationCase) -> str:
+        """Return a stable directory name for a case."""
+        name = (case.subfolder or "").strip()
+        if name:
+            return name
+        template = getattr(case, "template", None)
+        path = getattr(template, "template_path", None) if template else None
+        if path:
+            stem = Path(path).stem
+            if stem:
+                return stem
+        return "case"
+
     def _serialise_bounds(
         self, bounds: tuple[Array, Array] | Sequence[tuple[float, float]] | None
     ) -> List[tuple[float, float]] | None:
         if bounds is None:
             return None
         if isinstance(bounds, tuple) and len(bounds) == 2:
-            lo, hi = bounds
-            lo = np.asarray(lo, dtype=float).reshape(-1)
-            hi = np.asarray(hi, dtype=float).reshape(-1)
-            return list(zip(lo.tolist(), hi.tolist()))
+            lo_arr, hi_arr = bounds
+            lo_vec = np.asarray(lo_arr, dtype=float).reshape(-1)
+            hi_vec = np.asarray(hi_arr, dtype=float).reshape(-1)
+            return list(zip(lo_vec.tolist(), hi_vec.tolist()))
         serialised: List[tuple[float, float]] = []
-        for pair in bounds:
+        seq_bounds = cast(Sequence[tuple[float, float]], bounds)
+        for pair in seq_bounds:
             try:
                 lo, hi = pair
             except Exception:
@@ -442,8 +495,8 @@ class Engine:
                     else self._simplify_value(scalar)
                 )
             flat = arr.reshape(-1)
-            limited = flat[:16]
-            return [float(x) for x in limited.tolist()]
+            limited = flat[:16].tolist()
+            return [float(x) for x in limited]
         return str(value)
 
     def _build_run_summary(
@@ -607,9 +660,8 @@ class Engine:
 
         return callback
 
-    def _build_jacobian_wrapper(self) -> Callable[[Array], Array]:
-        """Wrap the Jacobian evaluator so it stays in sync with engine state."""
-        names = list(self.parameter_space.names)
+    def _jacobian_label_fn(self) -> Callable[[int], str | None]:
+        names = self._param_names
 
         def label_fn(idx: int) -> str | None:
             if idx < 0:
@@ -617,6 +669,12 @@ class Engine:
             if idx < len(names):
                 return f"_{names[idx]}"
             return f"_col_{idx}"
+
+        return label_fn
+
+    def _build_jacobian_wrapper(self) -> Callable[[Array], Array]:
+        """Wrap the Jacobian evaluator so it stays in sync with engine state."""
+        label_fn = self._jacobian_label_fn()
 
         def jacobian(phi_vec: Array) -> Array:
             phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
@@ -628,6 +686,22 @@ class Engine:
                 iter_dir = self._next_iter_dir()
             base_residual = self._last_residual
 
+            assert self.jacobian is not None
+            if self.jacobian.parallel:
+                if (
+                    self._cached_jac_phi is not None
+                    and self._cached_jacobian is not None
+                    and np.array_equal(phi_vec, self._cached_jac_phi)
+                ):
+                    return cast(Array, self._cached_jacobian.copy())
+                if base_residual is None:
+                    raise RuntimeError("Base residual not available for Jacobian.")
+                jobs = self._schedule_jacobian_jobs(phi_vec, iter_dir, label_fn)
+                J = self._finalize_jacobian_jobs(jobs, base_residual)
+                self._cached_jac_phi = phi_vec.copy()
+                self._cached_jacobian = J.copy()
+                return J
+
             def residual_with_label(theta_vec: Array, lbl: str | None) -> Array:
                 return self._residual_theta_vec(
                     theta_vec,
@@ -635,7 +709,6 @@ class Engine:
                     iter_dir=iter_dir,
                 )
 
-            assert self.jacobian is not None
             _, J = self.jacobian.compute(
                 phi_vec,
                 self._theta_vec,
@@ -674,6 +747,55 @@ class Engine:
         target_dir = iter_dir or self._next_iter_dir()
         return self._execute_cases(theta_dict, target_dir, label)
 
+    def _schedule_jacobian_jobs(
+        self,
+        phi_vec: Array,
+        iter_dir: Path,
+        label_fn: Callable[[int], str | None],
+    ) -> Dict[int, List[tuple[_CaseState, Path, RunHandle, str]]]:
+        """Launch Jacobian perturbation simulations without waiting."""
+        assert self.jacobian is not None
+        perturb = float(self.jacobian.perturbation)
+        jobs_by_index: Dict[int, List[tuple[_CaseState, Path, RunHandle, str]]] = {}
+        # self._logger.info(
+        #     "Scheduling %d Jacobian columns under %s",
+        #     len(self._param_names),
+        #     iter_dir,
+        # )
+        for idx, name in enumerate(self._param_names):
+            phi = phi_vec.copy()
+            phi[idx] += perturb
+            theta_vec = self._theta_vec(phi)
+            theta_dict = self.parameter_space.unpack_vec(theta_vec.tolist())
+            label = label_fn(idx)
+            jobs = self._launch_case_jobs(
+                theta_dict,
+                iter_dir,
+                label,
+            )
+            jobs_by_index[idx] = jobs
+        return jobs_by_index
+
+    def _finalize_jacobian_jobs(
+        self,
+        jobs_by_index: Dict[int, List[tuple[_CaseState, Path, RunHandle, str]]],
+        base_residual: Array,
+    ) -> Array:
+        """Wait for perturbation simulations and assemble the Jacobian."""
+        assert self.jacobian is not None
+        perturb = float(self.jacobian.perturbation)
+        J = cast(
+            Array, np.zeros((base_residual.size, len(self._param_names)), dtype=float)
+        )
+        for idx, jobs in jobs_by_index.items():
+            residual = self._finalize_case_jobs(
+                jobs,
+                track_series=False,
+                grid_overrides=self._case_grid_cache,
+            )
+            J[:, idx] = (residual - base_residual) / perturb
+        return J
+
     def _next_iter_dir(self) -> Path:
         """Return the directory where the next evaluation writes artefacts."""
         self._eval_index += 1
@@ -697,39 +819,42 @@ class Engine:
         self._iter_dirs.append(iter_dir)
         label = "_base" if self.jacobian is not None else ""
         self._series_latest = {}
-        residual = self._execute_cases(theta_dict, iter_dir, label)
+        base_jobs = self._launch_case_jobs(theta_dict, iter_dir, label)
+        residual = self._finalize_case_jobs(
+            base_jobs,
+            track_series=True,
+            grid_overrides=self._case_grid_cache,
+            update_grid_cache=True,
+        )
         self._last_phi = phi_vec.copy()
         self._last_theta_vec = theta_vec
         self._last_residual = residual.copy()
         self._last_iter_dir = iter_dir
+        self._cached_jac_phi = None
+        self._cached_jacobian = None
         self._cleanup_previous_iterations()
         return residual
 
-    def _execute_cases(
+    def _launch_case_jobs(
         self,
         theta: Mapping[str, float],
         iter_dir: Path,
         label: str | None,
-    ) -> Array:
-        """Render FEB files, launch simulations, and assemble residuals."""
+    ) -> List[tuple[_CaseState, Path, RunHandle, str]]:
+        """Prepare FEB files and launch simulations without waiting for completion."""
         theta_values = {k: float(v) for k, v in theta.items()}
+        base_dir = iter_dir
+        base_dir.mkdir(parents=True, exist_ok=True)
         jobs: List[tuple[_CaseState, Path, RunHandle, str]] = []
         for state in self._cases:
-            case_name = state.case.subfolder
-            if not case_name:
-                template_path = getattr(
-                    getattr(state.case, "template", None), "template_path", None
-                )
-                case_name = Path(template_path).stem if template_path else "case"
-            case_dir = iter_dir / case_name
-            case_dir.mkdir(parents=True, exist_ok=True)
+            case_name = state.name
             if label:
                 base_name = f"{case_name}{label}"
             else:
                 base_name = case_name
             feb_path = state.case.prepare(
                 dict(theta_values),
-                case_dir,
+                base_dir,
                 out_name=f"{base_name}.feb",
             )
             case_env = state.case.environment()
@@ -739,12 +864,27 @@ class Engine:
                 feb_path.name,
                 env=env_override,
             )
+            # sim_label = label or "_base"
+            # self._logger.info(
+            #     f"Launching simulation '{feb_path.name}' (label={sim_label}) in {feb_path.parent}"
+            # )
             jobs.append((state, feb_path, handle, case_name))
+        return jobs
 
+    def _finalize_case_jobs(
+        self,
+        jobs: List[tuple[_CaseState, Path, RunHandle, str]],
+        *,
+        track_series: bool,
+        grid_overrides: Dict[str, Dict[str, Array]] | None = None,
+        update_grid_cache: bool = False,
+    ) -> Array:
+        """Wait for running simulations and assemble residuals."""
         residuals: List[Array] = []
         r_squared: Dict[str, float] = {}
         all_exp: List[Array] = []
         all_sim: List[Array] = []
+        series_latest: Dict[str, Dict[str, Any]] = {}
 
         for state, feb_path, handle, case_name in jobs:
             try:
@@ -757,8 +897,13 @@ class Engine:
                     f"FEBio exited with code {result.exit_code} for case '{case_name}'"
                 )
             simulations = state.case.collect(feb_path)
+            overrides = None
+            if grid_overrides is not None:
+                overrides = grid_overrides.get(case_name)
             residual, _, details = self.residual_assembler.assemble_with_details(
-                state.experiments, simulations
+                state.experiments,
+                simulations,
+                target_grids=overrides,
             )
             if residual.size:
                 residuals.append(cast(Array, residual))
@@ -784,12 +929,21 @@ class Engine:
                     grid_vals = info.get("grid")
                     y_exp_vals = info.get("y_exp")
                     y_sim_vals = info.get("y_sim")
-                    if grid_vals is not None and y_exp_vals is not None and y_sim_vals is not None:
-                        self._series_latest[key] = {
+                    if (
+                        grid_vals is not None
+                        and y_exp_vals is not None
+                        and y_sim_vals is not None
+                    ):
+                        series_latest[key] = {
                             "x": _to_list(grid_vals),
                             "y_exp": _to_list(y_exp_vals),
                             "y_sim": _to_list(y_sim_vals),
                         }
+                    if update_grid_cache and grid_vals is not None:
+                        cache = self._case_grid_cache.setdefault(case_name, {})
+                        cache[exp_name] = cast(
+                            Array, np.asarray(grid_vals, dtype=float).reshape(-1)
+                        )
                 except Exception:
                     pass
 
@@ -806,11 +960,29 @@ class Engine:
                 else:
                     nrmse = 0.0 if rmse == 0.0 else float("nan")
 
-        self._last_metrics = {"nrmse": nrmse, "r_squared": r_squared}
+        metrics = {"nrmse": nrmse, "r_squared": r_squared}
+        if track_series:
+            self._series_latest = series_latest
+            self._last_metrics = metrics
 
         if not residuals:
             return cast(Array, np.array([], dtype=float))
         return cast(Array, np.concatenate(residuals))
+
+    def _execute_cases(
+        self,
+        theta: Mapping[str, float],
+        iter_dir: Path,
+        label: str | None,
+    ) -> Array:
+        """Render FEB files, launch simulations, and assemble residuals."""
+        jobs = self._launch_case_jobs(theta, iter_dir, label)
+        return self._finalize_case_jobs(
+            jobs,
+            track_series=True,
+            grid_overrides=self._case_grid_cache,
+            update_grid_cache=True,
+        )
 
     def _cleanup_previous_iterations(self) -> None:
         """Remove artefacts from older iterations, keeping current and best runs."""

@@ -71,10 +71,30 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
             upper = np.asarray([b[1] for b in seq_bounds], dtype=float)
         lsq_bounds = (lower, upper)
 
+        def _logged_fun(x: np.ndarray) -> np.ndarray:
+            vec = np.asarray(x, dtype=float)
+            print("fun")
+            resid = fun(vec)
+            # print("fun result", resid)
+            return resid
+
+        if jac is None:
+            wrapped_jac: str | Callable[[np.ndarray], np.ndarray] = "2-point"
+        else:
+
+            def _logged_jac(x: np.ndarray) -> np.ndarray:
+                vec = np.asarray(x, dtype=float)
+                print("jac")
+                mat = jac(vec)
+                # print("jac result", mat)
+                return mat
+
+            wrapped_jac = _logged_jac
+
         result = scipy.optimize.least_squares(  # type: ignore[attr-defined]
-            fun,
+            _logged_fun,
             phi0,
-            jac=jac if jac is not None else "2-point",
+            jac=wrapped_jac,
             bounds=lsq_bounds,
             callback=_callback if cb_list else None,
             **self.kwargs,

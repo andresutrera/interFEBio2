@@ -60,26 +60,26 @@ class RunRegistry:
         """Reload the registry contents from disk."""
         self._load()
 
-    def delete_run(self, run_id: str) -> bool:
-        """Remove a finished run if it is safe to delete."""
+    def delete_run(self, run_id: str, *, force: bool = False) -> bool:
+        """Remove a run if it is safe to delete or forcefully requested."""
         with self._lock:
             run = self._runs.get(run_id)
             if run is None:
                 return False
-            if run.status in {"created", "running"}:
+            if not force and run.status in {"created", "running"}:
                 raise ActiveRunDeletionError(run_id)
             del self._runs[run_id]
             self._sync_locked()
             return True
         return False
 
-    def clear(self) -> List[str]:
-        """Drop all deletable runs while listing those that remain."""
+    def clear(self, *, force: bool = False) -> List[str]:
+        """Drop runs and list those kept either due to activity or force=False."""
         with self._lock:
             protected: List[str] = []
             removable = []
             for run_id, run in self._runs.items():
-                if run.status in {"created", "running"}:
+                if not force and run.status in {"created", "running"}:
                     protected.append(run_id)
                 else:
                     removable.append(run_id)

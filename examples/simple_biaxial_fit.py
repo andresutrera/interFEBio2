@@ -58,6 +58,7 @@ def build_case(exp_series: ExperimentSeries, name: str) -> SimulationCase:
         subfolder="",
         experiments={name: exp_series},
         adapters={name: SimulationAdapter(read_sigma_xx)},
+        omp_threads=1,
     )
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, cast
 import inspect
@@ -22,12 +24,16 @@ class JacobianComputer:
     perturbation
         Step size applied to each optimisation parameter (in φ-space).
     parallel
-        Present for compatibility; the :class:`Engine` manages concurrency via
-        the runner job pool, so this flag is informational only.
+        When ``True`` the evaluator distributes column perturbations across a
+        worker pool so FEBio simulations can run concurrently.
+    max_workers
+        Optional override for the number of worker threads used for parallel
+        evaluation. Defaults to ``os.cpu_count()`` when unset.
     """
 
     perturbation: float = 1e-6
     parallel: bool = True
+    max_workers: int | None = None
 
     def compute(
         self,
@@ -64,19 +70,36 @@ class JacobianComputer:
         n = len(phi0)
         J = cast(Array, np.zeros((r0.size, n), dtype=float))
 
-        for i in range(n):
-            phi = phi0.copy()
-            phi[i] += self.perturbation
-            theta = theta_fn(phi)
-            lbl = label_fn(i) if label_fn is not None else None
-            ri = cast(
-                Array,
-                np.asarray(
-                    self._call_residual(residual_fn, theta, lbl, accepts_label),
-                    dtype=float,
-                ),
-            )
-            J[:, i] = (ri - r0) / self.perturbation
+        worker_count = self._worker_count(n)
+        if worker_count > 1:
+            with ThreadPoolExecutor(max_workers=worker_count) as pool:
+                futures = {
+                    pool.submit(
+                        self._evaluate_column,
+                        i,
+                        phi0,
+                        theta_fn,
+                        residual_fn,
+                        accepts_label,
+                        label_fn(i) if label_fn is not None else None,
+                    ): i
+                    for i in range(n)
+                }
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    ri = future.result()
+                    J[:, idx] = (ri - r0) / self.perturbation
+        else:
+            for i in range(n):
+                ri = self._evaluate_column(
+                    i,
+                    phi0,
+                    theta_fn,
+                    residual_fn,
+                    accepts_label,
+                    label_fn(i) if label_fn is not None else None,
+                )
+                J[:, i] = (ri - r0) / self.perturbation
 
         return r0, J
 
@@ -107,6 +130,34 @@ class JacobianComputer:
         if accepts_label:
             return residual_fn(theta, label)
         return residual_fn(theta)
+
+    def _worker_count(self, n: int) -> int:
+        if not self.parallel:
+            return 1
+        if self.max_workers is not None:
+            return max(1, min(int(self.max_workers), n))
+        cpu_count = os.cpu_count() or 1
+        return max(1, min(cpu_count, n))
+
+    def _evaluate_column(
+        self,
+        index: int,
+        phi0: Array,
+        theta_fn: Callable[[Array], Array],
+        residual_fn: Callable[[Array, str | None], Array],
+        accepts_label: bool,
+        label: str | None,
+    ) -> Array:
+        phi = phi0.copy()
+        phi[index] += self.perturbation
+        theta = theta_fn(phi)
+        return cast(
+            Array,
+            np.asarray(
+                self._call_residual(residual_fn, theta, label, accepts_label),
+                dtype=float,
+            ),
+        )
 
 
 __all__ = ["JacobianComputer"]
