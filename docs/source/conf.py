@@ -17,6 +17,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+autodoc_mock_imports = ["fastapi", "uvicorn", "prettytable"]
 
 autodoc_default_options = {
     "members": True,

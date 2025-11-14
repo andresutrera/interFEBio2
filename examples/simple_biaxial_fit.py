@@ -5,14 +5,22 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from interFEBio.Optimize.Parameters import ParameterSpace
 from interFEBio.Optimize.adapters import SimulationAdapter
 from interFEBio.Optimize.cases import SimulationCase
 from interFEBio.Optimize.engine import Engine
 from interFEBio.Optimize.experiments import ExperimentSeries
 from interFEBio.Optimize.feb_bindings import FebTemplate, ParameterBinding
+from interFEBio.Optimize.options import (
+    CleanupOptions,
+    EngineOptions,
+    JacobianOptions,
+    MonitorOptions,
+    OptimizerOptions,
+    RunnerOptions,
+    StorageOptions,
+)
+from interFEBio.Optimize.Parameters import ParameterSpace
 from interFEBio.XPLT import xplt
-
 
 HERE = Path(__file__).resolve().parent
 DATA_PATH = HERE / "../tests/optimize/data.txt"
@@ -62,24 +70,26 @@ def main() -> None:
     case = build_case(exp_series, "biax1")
     case2 = build_case(exp_series, "biax2")
 
+    options = EngineOptions(
+        jacobian=JacobianOptions(enabled=True, perturbation=1e-4),
+        cleanup=CleanupOptions(remove_previous=True, mode="retain_best"),
+        runner=RunnerOptions(jobs=PARALLEL_JOBS, command=FEBIO_COMMAND),
+        storage=StorageOptions(mode="tmp", root=WORK_ROOT),
+        monitor=MonitorOptions(enabled=True),
+        optimizer=OptimizerOptions(
+            name="least_squares",
+            settings={
+                "ftol": 1e-6,
+                "xtol": 1e-6,
+            },
+            reparametrize=False,
+        ),
+    )
+
     engine = Engine(
         parameter_space=parameter_space,
         cases=[case, case2],
-        grid_policy="sim_to_exp",
-        use_jacobian=True,
-        jacobian_perturbation=1e-4,
-        optimizer="least_squares",
-        optimizer_options={
-            "ftol": 1e-6,
-            "xtol": 1e-6,
-        },
-        cleanup_mode="retain_best",
-        cleanup_previous=True,
-        runner_jobs=PARALLEL_JOBS,
-        runner_command=FEBIO_COMMAND,
-        storage_mode="tmp",
-        storage_root=WORK_ROOT,
-        monitor=True,
+        options=options,
     )
 
     result = engine.run()

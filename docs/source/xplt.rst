@@ -155,8 +155,8 @@ Nodes and nodesets
     U_nodes_0_9_all_t = U[:, 0:10]             # (T, 10, C)
     U_nodes_pick_t0 = U[0, [0, 5, 42]]         # (3, C)
 
-    U_top_all_t = U.nodeset("TopRing")[:]      # (T, |set|, C)
-    Uy_top_t5 = U.nodeset("TopRing").comp(1)[5]  # (|set|,)
+    U_top_all_t = U.nodeset("TopRing")[:]      # (T, set size, C)
+    Uy_top_t5 = U.nodeset("TopRing").comp(1)[5]  # (set size,)
 
 Elements by domain
 ^^^^^^^^^^^^^^^^^^

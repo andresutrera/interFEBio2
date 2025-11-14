@@ -22,6 +22,7 @@ from .optimizers import (
     ScipyLeastSquaresAdapter,
     ScipyMinimizeAdapter,
 )
+from .options import EngineOptions
 from .Parameters import ParameterSpace
 from .residuals import ResidualAssembler
 from .runners import LocalParallelRunner, LocalSerialRunner, RunHandle, Runner
@@ -60,51 +61,51 @@ class Engine:
         self,
         parameter_space: ParameterSpace,
         cases: Sequence[SimulationCase],
-        grid_policy: GridPolicy = "sim_to_exp",
-        grid_values: Sequence[float] | None = None,
         *,
-        use_jacobian: bool = False,
-        jacobian_perturbation: float = 1e-6,
-        jacobian_parallel: bool = True,
-        cleanup_previous: bool = False,
-        cleanup_mode: str = "none",
-        optimizer: str = "least_squares",
-        optimizer_options: Dict[str, Any] | None = None,
-        runner_jobs: int = 1,
-        runner_command: Sequence[str] | None = None,
-        runner_env: Dict[str, str] | None = None,
-        storage_mode: str = "disk",
-        storage_root: str | Path | None = None,
-        log_file: str | Path | None = None,
-        monitor: bool = True,
-        monitor_socket: str | Path | None = None,
-        monitor_label: str | None = None,
+        options: EngineOptions | None = None,
     ) -> None:
-        """Initialise the optimisation engine and supporting services."""
+        """Initialise the optimisation engine using structured configuration."""
         if not cases:
             raise ValueError("At least one SimulationCase is required.")
 
+        self.options = options = options or EngineOptions()
         self.parameter_space = parameter_space
+        grid_policy = options.grid.policy
+        grid_values = options.grid.values
+        jacobian_opts = options.jacobian
+        cleanup_opts = options.cleanup
+        runner_opts = options.runner
+        storage_opts = options.storage
+        monitor_opts = options.monitor
+        optimizer_opts = options.optimizer
+        self._reparam_enabled = bool(optimizer_opts.reparametrize)
+
         self.jacobian: JacobianComputer | None = (
             JacobianComputer(
-                perturbation=float(jacobian_perturbation),
-                parallel=bool(jacobian_parallel),
+                perturbation=float(jacobian_opts.perturbation),
+                parallel=bool(jacobian_opts.parallel),
             )
-            if use_jacobian
+            if jacobian_opts.enabled
             else None
         )
+        storage_mode = storage_opts.mode.lower()
         self.storage_mode = storage_mode
+
+        cleanup_previous = bool(cleanup_opts.remove_previous)
+        cleanup_mode = cleanup_opts.mode.lower()
         if storage_mode == "tmp":
             cleanup_previous = True
             cleanup_mode = "all"
-        cleanup_mode = cleanup_mode.lower()
         if cleanup_mode not in {"none", "retain_best", "all"}:
             raise ValueError(
                 "cleanup_mode must be one of: 'none', 'retain_best', 'all'"
             )
         self.cleanup_previous = bool(cleanup_previous)
         self.cleanup_mode = cleanup_mode
-        self.optimizer_adapter = self._build_optimizer(optimizer, optimizer_options)
+        optimizer_settings = dict(optimizer_opts.settings or {})
+        self.optimizer_adapter = self._build_optimizer(
+            optimizer_opts.name, optimizer_settings
+        )
         self.grid = EvaluationGrid(
             policy=grid_policy,
             common_grid=None
@@ -116,11 +117,10 @@ class Engine:
             grid=self.grid, aligner=self.aligner
         )
 
-        storage_mode = storage_mode.lower()
         if storage_mode not in {"disk", "tmp"}:
             raise ValueError("storage_mode must be 'disk' or 'tmp'")
         storage_parent = (
-            Path(storage_root).expanduser() if storage_root is not None else None
+            Path(storage_opts.root).expanduser() if storage_opts.root is not None else None
         )
         self.storage = StorageManager(
             parent=storage_parent,
@@ -128,21 +128,25 @@ class Engine:
         )
         self.workdir = self.storage.resolve()
         if storage_mode == "tmp":
-            if storage_root is not None:
-                persist_root = Path(storage_root).expanduser().resolve()
+            if storage_opts.root is not None:
+                persist_root = Path(storage_opts.root).expanduser().resolve()
             else:
                 persist_root = Path.cwd() / self.workdir.name
             persist_root.mkdir(parents=True, exist_ok=True)
             self.persist_root = persist_root
         else:
             self.persist_root = self.workdir
-        self._log_file = self._resolve_log_file(log_file, storage_root)
+        self._log_file = self._resolve_log_file(
+            storage_opts.log_file, storage_opts.root
+        )
         log_instance = Log(log_file=self._log_file)
         self._logger = log_instance.logger
         self._initMsg()
 
-        self._runner_jobs = int(max(1, runner_jobs))
-        runner_command = tuple(runner_command or ("febio4", "-i"))
+        runner_jobs = int(max(1, runner_opts.jobs))
+        runner_command = tuple(runner_opts.command or ("febio4", "-i"))
+        runner_env = dict(runner_opts.env) if runner_opts.env is not None else None
+        self._runner_jobs = runner_jobs
         if runner_jobs <= 1:
             self.runner: Runner = LocalSerialRunner(
                 command=runner_command, env=runner_env
@@ -179,11 +183,11 @@ class Engine:
         self._last_residual: Array | None = None
         self._last_iter_dir: Path | None = None
         self._last_metrics: Dict[str, Any] = {}
-        self._monitor_enabled = bool(monitor)
+        self._monitor_enabled = bool(monitor_opts.enabled)
         self._monitor_socket = (
-            Path(monitor_socket).expanduser() if monitor_socket else None
+            Path(monitor_opts.socket).expanduser() if monitor_opts.socket else None
         )
-        self._monitor_label = monitor_label
+        self._monitor_label = monitor_opts.label
         self._monitor_client: OptimizationMonitorClient | None = None
         self._series_latest: Dict[str, Dict[str, Any]] = {}
 
@@ -223,15 +227,26 @@ class Engine:
             self._last_iter_dir = None
             self._last_metrics = {}
 
-            phi0_vec = cast(
-                Array,
-                np.asarray(phi0, dtype=float)
-                if phi0 is not None
-                else np.zeros(len(self.parameter_space.names), dtype=float),
-            )
-            bounds_input = (
-                bounds if bounds is not None else self.parameter_space.phi_bounds()
-            )
+            if phi0 is not None:
+                phi0_vec = cast(Array, np.asarray(phi0, dtype=float))
+            else:
+                if self._reparam_enabled:
+                    phi0_vec = cast(
+                        Array,
+                        np.zeros(len(self.parameter_space.names), dtype=float),
+                    )
+                else:
+                    theta0_vec = self.parameter_space.pack_dict(
+                        self.parameter_space.theta0
+                    )
+                    phi0_vec = cast(Array, np.asarray(theta0_vec, dtype=float))
+            bounds_input = bounds
+            if bounds_input is None:
+                bounds_input = (
+                    self.parameter_space.phi_bounds()
+                    if self._reparam_enabled
+                    else self.parameter_space.theta_bounds_array()
+                )
             if monitor_client is not None:
                 try:
                     self._emit_monitor_start(monitor_client, phi0_vec, bounds_input)
@@ -259,8 +274,7 @@ class Engine:
             )
 
             phi_opt_array = cast(Array, np.asarray(phi_opt, dtype=float))
-            theta_opt_vec = self.parameter_space.theta_from_phi(phi_opt_array)
-            theta_opt_vec = self.parameter_space.clamp_theta(theta_opt_vec)
+            theta_opt_vec = self._phi_to_theta(phi_opt_array)
             theta_opt = self.parameter_space.unpack_vec(theta_opt_vec.tolist())
             self._log_final_summary(phi_opt_array, theta_opt)
             if monitor_client is not None:
@@ -341,7 +355,7 @@ class Engine:
         phi0_vec: Array,
         bounds: tuple[Array, Array] | Sequence[tuple[float, float]] | None,
     ) -> None:
-        theta0_vec = self.parameter_space.theta_from_phi(phi0_vec)
+        theta0_vec = self._phi_to_theta(phi0_vec)
         parameters: Dict[str, Any] = {
             "names": list(self.parameter_space.names),
             "phi0": [float(x) for x in np.asarray(phi0_vec, dtype=float)],
@@ -528,22 +542,33 @@ class Engine:
         logger = self._logger
 
         def callback(phi_vec: Array, cost: float) -> None:
-            theta_vec = self.parameter_space.theta_from_phi(phi_vec)
+            theta_vec = self._phi_to_theta(phi_vec)
             table = PrettyTable()
-            table.field_names = ["parameter", "phi", "theta"]
+            if self._reparam_enabled:
+                table.field_names = ["parameter", "phi", "theta"]
+            else:
+                table.field_names = ["parameter", "theta"]
             theta_dict: Dict[str, float] = {}
             for name, phi_value, theta_value in zip(
                 self.parameter_space.names, phi_vec, theta_vec, strict=True
             ):
                 theta_float = float(theta_value)
                 theta_dict[name] = theta_float
-                table.add_row(
-                    [
-                        name,
-                        f"{float(phi_value):.6e}",
-                        f"{theta_float:.6e}",
-                    ]
-                )
+                if self._reparam_enabled:
+                    table.add_row(
+                        [
+                            name,
+                            f"{float(phi_value):.6e}",
+                            f"{theta_float:.6e}",
+                        ]
+                    )
+                else:
+                    table.add_row(
+                        [
+                            name,
+                            f"{theta_float:.6e}",
+                        ]
+                    )
             metrics = self._last_metrics or {}
             nrmse_val = metrics.get("nrmse")
             r_squared = metrics.get("r_squared", {})
@@ -635,8 +660,15 @@ class Engine:
 
     def _theta_vec(self, phi_vec: Array) -> Array:
         """Map φ values to constrained θ values using the parameter space."""
+        return self._phi_to_theta(phi_vec)
+
+    def _phi_to_theta(self, phi_vec: Array) -> Array:
+        """Convert optimiser coordinates into θ-space, applying bounds."""
         phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
-        theta_vec = self.parameter_space.theta_from_phi(phi_vec)
+        if self._reparam_enabled:
+            theta_vec = self.parameter_space.theta_from_phi(phi_vec)
+        else:
+            theta_vec = phi_vec
         theta_vec = self.parameter_space.clamp_theta(theta_vec)
         return cast(Array, np.asarray(theta_vec, dtype=float))
 

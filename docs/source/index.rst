@@ -6,3 +6,4 @@ Welcome to interFEBio documentation
    :caption: Contents:
 
    xplt
+   interfebio

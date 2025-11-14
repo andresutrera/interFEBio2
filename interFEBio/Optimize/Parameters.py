@@ -167,6 +167,21 @@ class ParameterSpace:
             hi[mask] = self.phi_from_theta(self._th_hi)[mask]
         return lo, hi
 
+    def theta_bounds_array(self) -> tuple[Array, Array] | None:
+        """Return θ-space bounds as dense arrays."""
+        if self._th_lo is None and self._th_hi is None:
+            return None
+        size = len(self._names)
+        if self._th_lo is not None:
+            lo = cast(Array, np.asarray(self._th_lo, dtype=float))
+        else:
+            lo = cast(Array, np.full(size, -np.inf, dtype=float))
+        if self._th_hi is not None:
+            hi = cast(Array, np.asarray(self._th_hi, dtype=float))
+        else:
+            hi = cast(Array, np.full(size, +np.inf, dtype=float))
+        return lo.copy(), hi.copy()
+
     def clamp_theta(self, theta_vec: Array) -> Array:
         """Clamp θ values according to stored bounds."""
         if self._th_lo is None and self._th_hi is None:

@@ -32,19 +32,60 @@ HOME_HEAD = textwrap.dedent(
       <meta charset="utf-8">
       <title>interFEBio Monitor</title>
       <style>
-        :root { color-scheme: dark; }
+        :root {
+          color-scheme: dark;
+          --bg-color: #0f1526;
+          --text-color: #f5f5f5;
+          --muted-text: rgba(245, 245, 245, 0.6);
+          --panel-bg: #1d2538;
+          --card-bg: #232c42;
+          --table-bg: #232c42;
+          --table-header-bg: #2f3954;
+          --table-row-alt: #1c2438;
+          --table-row-hover: #314162;
+          --link-color: #65b7ff;
+          --chart-bg: #10172a;
+          --chart-axis: rgba(245, 245, 245, 0.75);
+          --chart-grid: rgba(255, 255, 255, 0.08);
+          --chart-zero: rgba(255, 255, 255, 0.18);
+          --json-bg: #111727;
+          --param-value: #9bd4ff;
+          --ghost-button-bg: rgba(255, 255, 255, 0.08);
+          --ghost-button-border: rgba(255, 255, 255, 0.2);
+        }
+        body.light {
+          color-scheme: light;
+          --bg-color: #f3f4f7;
+          --text-color: #1f2430;
+          --muted-text: rgba(31, 36, 48, 0.65);
+          --panel-bg: #ffffff;
+          --card-bg: #f7f9fc;
+          --table-bg: #ffffff;
+          --table-header-bg: #edf1f7;
+          --table-row-alt: #f4f6fb;
+          --table-row-hover: #e1e8f3;
+          --link-color: #2f5aa8;
+          --chart-bg: #ffffff;
+          --chart-axis: rgba(31, 36, 48, 0.78);
+          --chart-grid: rgba(100, 116, 139, 0.2);
+          --chart-zero: rgba(15, 23, 42, 0.2);
+          --json-bg: #f5f7fb;
+          --param-value: #1b4f91;
+          --ghost-button-bg: rgba(38, 84, 164, 0.1);
+          --ghost-button-border: rgba(38, 84, 164, 0.35);
+        }
         * { box-sizing: border-box; }
-        body { font-family: "Inter", Arial, sans-serif; margin: 1.5rem; background: #0f1526; color: #f5f5f5; }
-        a { color: #65b7ff; text-decoration: none; }
+        body { font-family: "Inter", Arial, sans-serif; margin: 1.5rem; background: var(--bg-color); color: var(--text-color); transition: background 0.2s ease, color 0.2s ease; }
+        a { color: var(--link-color); text-decoration: none; }
         a:hover { text-decoration: underline; }
         .layout { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start; }
-        .panel { background: #1d2538; border-radius: 12px; box-shadow: 0 10px 24px rgba(10, 18, 46, 0.4); padding: 1rem 1.25rem; flex: 1 1 360px; min-width: 320px; }
+        .panel { background: var(--panel-bg); border-radius: 12px; box-shadow: 0 10px 24px rgba(10, 18, 46, 0.18); padding: 1rem 1.25rem; flex: 1 1 360px; min-width: 320px; transition: background 0.2s ease, color 0.2s ease; }
         .panel h2 { margin-top: 0; font-size: 1.1rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
-        table { border-collapse: collapse; width: 100%; background: #232c42; border-radius: 8px; overflow: hidden; }
+        table { border-collapse: collapse; width: 100%; background: var(--table-bg); border-radius: 8px; overflow: hidden; }
         th, td { padding: 0.6rem 0.8rem; text-align: left; font-size: 0.9rem; }
-        th { background: #2f3954; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05rem; }
-        tr:nth-child(even) { background: #1c2438; }
-        tr:hover { background: #314162; }
+        th { background: var(--table-header-bg); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05rem; }
+        tr:nth-child(even) { background: var(--table-row-alt); }
+        tr:hover { background: var(--table-row-hover); }
         .status { font-weight: 600; text-transform: uppercase; letter-spacing: 0.03rem; }
         .status.finished { color: #81d887; }
         .status.failed { color: #ff6b6b; }
@@ -54,13 +95,24 @@ HOME_HEAD = textwrap.dedent(
         button:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(58, 123, 213, 0.35); }
         .table-actions button { margin-right: 0; }
         .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-        .summary-card { background: #232c42; border-radius: 10px; padding: 0.75rem 0.9rem; }
+        .summary-card { background: var(--card-bg); border-radius: 10px; padding: 0.75rem 0.9rem; }
         .summary-card dt { font-size: 0.75rem; text-transform: uppercase; opacity: 0.6; margin-bottom: 0.25rem; letter-spacing: 0.04rem; }
         .summary-card dd { margin: 0; font-size: 1rem; font-weight: 600; }
-        .chart-wrapper { background: #232c42; border-radius: 10px; padding: 0.75rem 1rem; }
+        .chart-wrapper { background: var(--card-bg); border-radius: 10px; padding: 0.75rem 1rem; }
         .chart-wrapper h3 { margin: 0 0 0.5rem 0; font-size: 0.95rem; letter-spacing: 0.03rem; text-transform: uppercase; opacity: 0.75; }
-        .chart { width: 100%; height: 420px; display: block; border-radius: 6px; background: #10172a; }
-        pre { background: #111727; padding: 1rem; border-radius: 10px; overflow-x: auto; margin: 0; font-size: 0.85rem; }
+        .chart { width: 100%; height: 420px; display: block; border-radius: 6px; background: var(--chart-bg); }
+        pre { background: var(--json-bg); padding: 1rem; border-radius: 10px; overflow-x: auto; margin: 0; font-size: 0.85rem; }
+        .param-grid { display: flex; flex-direction: column; gap: 0.2rem; font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; font-size: 0.85rem; }
+        .param-row { display: flex; justify-content: space-between; gap: 0.5rem; }
+        .param-row span:last-child { color: var(--param-value); }
+        .status-reason { display: block; font-size: 0.8rem; color: #ff9b9b; margin-top: 0.15rem; line-height: 1.3; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .page-header h1 { font-size: 1.6rem; margin: 0 0 0.35rem 0; }
+        .page-header p { margin: 0; opacity: 0.65; }
+        .ghost-button { margin-right: 0; padding: 0.35rem 0.9rem; background: var(--ghost-button-bg); color: var(--text-color); border: 1px solid var(--ghost-button-border); border-radius: 999px; font-weight: 600; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+        .ghost-button:hover { background: rgba(255, 255, 255, 0.18); }
+        body.light .ghost-button:hover { background: rgba(38, 84, 164, 0.2); }
+        .series-select { background: var(--panel-bg); color: var(--text-color); border: 1px solid var(--ghost-button-border); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.9rem; transition: background 0.2s ease, color 0.2s ease; }
         @media (max-width: 960px) {
           body { margin: 1rem; }
           .layout { flex-direction: column; }
@@ -75,9 +127,12 @@ HOME_HEAD = textwrap.dedent(
 HOME_BODY = textwrap.dedent(
     """\
     <body>
-      <header style="margin-bottom: 1rem;">
-        <h1 style="font-size: 1.6rem; margin: 0 0 0.6rem 0;">Optimization Runs</h1>
-        <p style="margin: 0; opacity: 0.6;">Monitor optimisation progress, inspect iteration history, and review run artefacts.</p>
+      <header class="page-header">
+        <div>
+          <h1>Optimization Runs</h1>
+          <p>Monitor optimisation progress, inspect iteration history, and review run artefacts.</p>
+        </div>
+        <button id="themeToggle" class="ghost-button">Light mode</button>
       </header>
       <div class="layout">
         <section class="panel" id="runsPanel">
@@ -115,13 +170,13 @@ HOME_BODY = textwrap.dedent(
           <div class="chart-wrapper">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Experiment vs Simulation</h3>
-              <select id="seriesSelect" style="background:#151f34; color:#f5f5f5; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0.35rem 0.6rem; font-size:0.9rem;"></select>
+              <select id="seriesSelect" class="series-select"></select>
             </div>
             <div id="seriesChart" class="chart"></div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.1rem;">
             <h3 style="font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75; margin:0;">Raw JSON</h3>
-            <button id="toggleJson" style="margin-right:0; background:rgba(255,255,255,0.08); padding:0.3rem 0.8rem;">Expand</button>
+            <button id="toggleJson" class="ghost-button" style="margin-right:0;">Expand</button>
           </div>
           <pre id="detailJson" style="max-height:0; overflow:hidden; transition:max-height 0.18s ease; visibility:hidden;">{}</pre>
         </section>
@@ -141,7 +196,107 @@ HOME_BODY = textwrap.dedent(
         let selectedRunId = null;
         let lastTableHtml = '';
         let currentSeriesData = {};
+        let currentDetailData = null;
+        const themeStorageKey = 'interfebio-monitor-theme';
         const plotlyConfig = { displayModeBar: false, responsive: true };
+        const themeToggleBtn = document.getElementById('themeToggle');
+        function escapeHtml(value) {
+          return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+        function formatParameterValue(value) {
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            return value.toExponential(4);
+          }
+          const numeric = Number(value);
+          if (Number.isFinite(numeric)) {
+            return numeric.toExponential(4);
+          }
+          if (value === undefined || value === null) {
+            return '-';
+          }
+          return escapeHtml(String(value));
+        }
+        function latestThetaSnapshot(data) {
+          const iterations = Array.isArray(data?.iterations) ? data.iterations : [];
+          for (let i = iterations.length - 1; i >= 0; i -= 1) {
+            const entry = iterations[i];
+            if (entry && entry.theta && typeof entry.theta === 'object' && Object.keys(entry.theta).length) {
+              return entry.theta;
+            }
+          }
+          return null;
+        }
+        function extractLatestSeries(data) {
+          const iterations = Array.isArray(data?.iterations) ? data.iterations : [];
+          for (let idx = iterations.length - 1; idx >= 0; idx -= 1) {
+            const entry = iterations[idx];
+            if (entry && entry.series && typeof entry.series === 'object' && Object.keys(entry.series).length) {
+              return entry.series;
+            }
+          }
+          return {};
+        }
+        function getCssColor(name, fallback) {
+          const value = getComputedStyle(document.body).getPropertyValue(name);
+          return value && value.trim().length ? value.trim() : fallback;
+        }
+        function chartColors() {
+          return {
+            bg: getCssColor('--chart-bg', '#10172a'),
+            text: getCssColor('--chart-axis', '#f5f5f5'),
+            grid: getCssColor('--chart-grid', 'rgba(255,255,255,0.08)'),
+            zero: getCssColor('--chart-zero', 'rgba(255,255,255,0.18)'),
+            muted: getCssColor('--muted-text', 'rgba(255,255,255,0.5)'),
+          };
+        }
+        function updateThemeButton() {
+          if (!themeToggleBtn) {
+            return;
+          }
+          const isLight = document.body.classList.contains('light');
+          themeToggleBtn.textContent = isLight ? 'Dark mode' : 'Light mode';
+        }
+        function refreshThemeDependentViews() {
+          if (currentDetailData) {
+            renderDetailPanels(currentDetailData, { refreshJson: false });
+          } else {
+            renderEmptyPlot(costChartEl, 'Select a run');
+            renderEmptyPlot(seriesChartEl, 'Select a run');
+          }
+        }
+        function applyTheme(theme, { skipStorage = false } = {}) {
+          const isLight = theme === 'light';
+          document.body.classList.toggle('light', isLight);
+          if (!skipStorage) {
+            try {
+              localStorage.setItem(themeStorageKey, isLight ? 'light' : 'dark');
+            } catch (err) {
+              // ignore storage errors
+            }
+          }
+          updateThemeButton();
+          refreshThemeDependentViews();
+        }
+        (function initTheme() {
+          let saved = null;
+          try {
+            saved = localStorage.getItem(themeStorageKey);
+          } catch (err) {
+            saved = null;
+          }
+          applyTheme(saved === 'light' ? 'light' : 'dark', { skipStorage: true });
+          if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', () => {
+              const nextTheme = document.body.classList.contains('light') ? 'dark' : 'light';
+              applyTheme(nextTheme);
+            });
+          }
+        })();
         function hasPlotly() {
           return typeof Plotly !== 'undefined' && Plotly.react;
         }
@@ -149,16 +304,17 @@ HOME_BODY = textwrap.dedent(
           if (!container) {
             return;
           }
+          const colors = chartColors();
           if (!hasPlotly()) {
-            container.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; color:rgba(255,255,255,0.5); font-size:16px;">${message}</div>`;
+            container.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; color:${colors.muted}; font-size:16px;">${message}</div>`;
             return;
           }
           Plotly.react(
             container,
             [],
             {
-              paper_bgcolor: '#10172a',
-              plot_bgcolor: '#10172a',
+              paper_bgcolor: colors.bg,
+              plot_bgcolor: colors.bg,
               autosize: true,
               height: 420,
               margin: { l: 0, r: 0, t: 0, b: 0 },
@@ -172,7 +328,7 @@ HOME_BODY = textwrap.dedent(
                   xref: 'paper',
                   yref: 'paper',
                   showarrow: false,
-                  font: { color: 'rgba(255,255,255,0.5)', size: 16 },
+                  font: { color: colors.muted, size: 16 },
                 },
               ],
             },
@@ -243,21 +399,27 @@ HOME_BODY = textwrap.dedent(
               throw new Error('Failed to load run details');
             }
             const data = await res.json();
-            detail.hidden = false;
-            detailTitle.textContent = data.label || data.run_id || 'Run detail';
-            renderSummary(data);
-            renderIterations(data);
-            const iterations = Array.isArray(data.iterations) ? data.iterations : [];
-            let latestSeries = {};
-            for (let idx = iterations.length - 1; idx >= 0; idx--) {
-              const entry = iterations[idx];
-              if (entry && entry.series && typeof entry.series === 'object' && Object.keys(entry.series).length) {
-                latestSeries = entry.series;
-                break;
-              }
-            }
-            renderSeries(latestSeries);
-            if (detailJson) {
+            currentDetailData = data;
+            renderDetailPanels(data);
+          } catch (err) {
+            console.error(err);
+            detailSummary.innerHTML = "<p style='color:#ff6b6b;'>Failed to load run details.</p>";
+            renderEmptyPlot(costChartEl, 'Failed to load data');
+            renderEmptyPlot(seriesChartEl, 'Failed to load data');
+          }
+        }
+
+        function renderDetailPanels(data, { refreshJson = true } = {}) {
+          if (!data) {
+            return;
+          }
+          detail.hidden = false;
+          detailTitle.textContent = data.label || data.run_id || 'Run detail';
+          renderSummary(data);
+          renderIterations(data);
+          renderSeries(extractLatestSeries(data));
+          if (detailJson) {
+            if (refreshJson) {
               const resetJson = detailJson.textContent === '' || detailJson.textContent === '{}';
               const text = JSON.stringify(data, null, 2);
               if (detailJson.textContent !== text) {
@@ -270,12 +432,15 @@ HOME_BODY = textwrap.dedent(
                 detailJson.style.overflowY = 'auto';
                 detailJson.style.visibility = 'visible';
               }
+            } else if (jsonExpanded) {
+              detailJson.style.maxHeight = '320px';
+              detailJson.style.overflowY = 'auto';
+              detailJson.style.visibility = 'visible';
+            } else {
+              detailJson.style.maxHeight = '0';
+              detailJson.style.overflowY = 'hidden';
+              detailJson.style.visibility = 'hidden';
             }
-          } catch (err) {
-            console.error(err);
-            detailSummary.innerHTML = "<p style='color:#ff6b6b;'>Failed to load run details.</p>";
-            renderEmptyPlot(costChartEl, 'Failed to load data');
-            renderEmptyPlot(seriesChartEl, 'Failed to load data');
           }
         }
 
@@ -287,7 +452,14 @@ HOME_BODY = textwrap.dedent(
         function renderSummary(data) {
           const summary = [];
           const meta = data.meta || {};
-          summary.push({ label: 'Status', value: data.status || 'unknown' });
+          const statusRaw = typeof data.status === 'string' ? data.status : 'unknown';
+          const statusLower = statusRaw.toLowerCase();
+          let statusValue = escapeHtml(statusRaw);
+          const failureReason = typeof meta.failure_reason === 'string' ? meta.failure_reason : null;
+          if (statusLower === 'failed' && failureReason) {
+            statusValue += `<span class="status-reason">${escapeHtml(failureReason)}</span>`;
+          }
+          summary.push({ label: 'Status', value: statusValue });
           if (typeof meta.best_cost === 'number') {
             summary.push({ label: 'Best cost', value: meta.best_cost.toExponential(4) });
           }
@@ -297,14 +469,15 @@ HOME_BODY = textwrap.dedent(
           if (meta.r_squared && typeof meta.r_squared === 'object') {
             const entries = Object.entries(meta.r_squared)
               .map(([key, value]) => {
+                const safeKey = escapeHtml(key);
                 if (value === null || value === undefined) {
-                  return `${key}: -`;
+                  return `${safeKey}: -`;
                 }
                 const num = Number(value);
                 if (!Number.isFinite(num)) {
-                  return `${key}: -`;
+                  return `${safeKey}: -`;
                 }
-                return `${key}: ${num.toFixed(4)}`;
+                return `${safeKey}: ${num.toFixed(4)}`;
               });
             if (entries.length) {
               summary.push({ label: 'R²', value: entries.join('<br>') });
@@ -320,16 +493,58 @@ HOME_BODY = textwrap.dedent(
                 label = JSON.stringify(meta.optimizer);
               }
             }
-            summary.push({ label: 'Optimizer', value: label });
+            const safeLabel = typeof label === 'string' ? escapeHtml(label) : escapeHtml(String(label));
+            summary.push({ label: 'Optimizer', value: safeLabel });
           }
-          if (data.parameters && Array.isArray(data.parameters.names)) {
-            summary.push({ label: 'Parameters', value: data.parameters.names.join(', ') });
+          const paramCard = buildParameterCard(data);
+          if (paramCard) {
+            summary.push(paramCard);
           }
           detailSummary.innerHTML = summary.map(item => `
             <dl class="summary-card">
               <dt>${item.label}</dt>
               <dd>${item.value}</dd>
             </dl>`).join('') || "<p style='opacity:0.6;'>No summary metadata</p>";
+        }
+
+        function buildParameterCard(data) {
+          if (!data) {
+            return null;
+          }
+          const parameterMeta = data.parameters || {};
+          const names = Array.isArray(parameterMeta.names)
+            ? parameterMeta.names.filter(name => typeof name === 'string')
+            : [];
+          const theta0 = Array.isArray(parameterMeta.theta0) ? parameterMeta.theta0 : null;
+          const latestTheta = latestThetaSnapshot(data);
+          const rows = [];
+          const seen = new Set();
+          names.forEach((name, idx) => {
+            let value;
+            if (latestTheta && Object.prototype.hasOwnProperty.call(latestTheta, name)) {
+              value = latestTheta[name];
+            } else if (theta0 && theta0[idx] !== undefined) {
+              value = theta0[idx];
+            }
+            if (value !== undefined) {
+              rows.push(`<div class="param-row"><span>${escapeHtml(name)}</span><span>${formatParameterValue(value)}</span></div>`);
+              seen.add(name);
+            }
+          });
+          if (latestTheta) {
+            Object.entries(latestTheta).forEach(([name, value]) => {
+              if (typeof name === 'string' && !seen.has(name)) {
+                rows.push(`<div class="param-row"><span>${escapeHtml(name)}</span><span>${formatParameterValue(value)}</span></div>`);
+              }
+            });
+          }
+          if (rows.length) {
+            return { label: 'Parameters', value: `<div class="param-grid">${rows.join('')}</div>` };
+          }
+          if (names.length) {
+            return { label: 'Parameters', value: names.map(escapeHtml).join(', ') };
+          }
+          return null;
         }
 
         function renderIterations(data) {
@@ -358,6 +573,7 @@ HOME_BODY = textwrap.dedent(
             renderEmptyPlot(costChartEl, 'Plotly.js not available');
             return;
           }
+          const colors = chartColors();
           const tickStep = points.length > 1 ? Math.max(1, Math.ceil(points.length / 10)) : 1;
           const trace = {
             x: points.map(item => item.idx),
@@ -369,24 +585,24 @@ HOME_BODY = textwrap.dedent(
             hovertemplate: 'Iteration %{x}<br>Cost %{y:.4e}<extra></extra>',
           };
           const layout = {
-            paper_bgcolor: '#10172a',
-            plot_bgcolor: '#10172a',
+            paper_bgcolor: colors.bg,
+            plot_bgcolor: colors.bg,
             autosize: true,
             height: 420,
             margin: { l: 64, r: 28, t: 32, b: 64 },
-            font: { color: '#f5f5f5' },
+            font: { color: colors.text },
             xaxis: {
               title: { text: 'Iteration' },
               dtick: tickStep,
-              color: 'rgba(255,255,255,0.75)',
-              gridcolor: 'rgba(255,255,255,0.08)',
-              zerolinecolor: 'rgba(255,255,255,0.18)',
+              color: colors.text,
+              gridcolor: colors.grid,
+              zerolinecolor: colors.zero,
             },
             yaxis: {
               title: { text: 'Cost' },
-              color: 'rgba(255,255,255,0.75)',
-              gridcolor: 'rgba(255,255,255,0.08)',
-              zerolinecolor: 'rgba(255,255,255,0.18)',
+              color: colors.text,
+              gridcolor: colors.grid,
+              zerolinecolor: colors.zero,
               tickformat: '.2e',
             },
             hovermode: 'closest',
@@ -417,6 +633,7 @@ HOME_BODY = textwrap.dedent(
           detailJson.style.visibility = 'hidden';
           selectedRunId = null;
           currentSeriesData = {};
+           currentDetailData = null;
           if (seriesSelect) {
             seriesSelect.innerHTML = '';
             seriesSelect.disabled = true;
@@ -491,6 +708,7 @@ HOME_BODY = textwrap.dedent(
             renderEmptyPlot(seriesChartEl, 'Plotly.js not available');
             return;
           }
+          const colors = chartColors();
           const traces = [
             {
               x: points.map(p => p.x),
@@ -510,23 +728,23 @@ HOME_BODY = textwrap.dedent(
             },
           ];
           const layout = {
-            paper_bgcolor: '#10172a',
-            plot_bgcolor: '#10172a',
+            paper_bgcolor: colors.bg,
+            plot_bgcolor: colors.bg,
             autosize: true,
             height: 420,
             margin: { l: 64, r: 28, t: 32, b: 64 },
-            font: { color: '#f5f5f5' },
+            font: { color: colors.text },
             xaxis: {
               title: { text: 'x' },
-              color: 'rgba(255,255,255,0.75)',
-              gridcolor: 'rgba(255,255,255,0.08)',
-              zerolinecolor: 'rgba(255,255,255,0.18)',
+              color: colors.text,
+              gridcolor: colors.grid,
+              zerolinecolor: colors.zero,
             },
             yaxis: {
               title: { text: 'y' },
-              color: 'rgba(255,255,255,0.75)',
-              gridcolor: 'rgba(255,255,255,0.08)',
-              zerolinecolor: 'rgba(255,255,255,0.18)',
+              color: colors.text,
+              gridcolor: colors.grid,
+              zerolinecolor: colors.zero,
             },
             legend: {
               orientation: 'h',
