@@ -132,6 +132,24 @@ def test_evaluation_binding_callable(tmp_path: Path) -> None:
     assert tree.getroot().find(".//Control/max_ups").text == "30.0"
 
 
+def test_evaluation_binding_template(tmp_path: Path) -> None:
+    template_path = _write_template(tmp_path)
+    template = FebTemplate(
+        template_path,
+        bindings=[
+            EvaluationBinding(
+                xpath=".//Geometry/Nodes/node[@id='2']",
+                value="node_1",
+                text_template="2,{value}",
+            )
+        ],
+    )
+
+    theta = {"node_1": 3.14159}
+    tree = template.render(theta, ctx=BuildContext(fmt="%.3f"))
+    assert tree.getroot().find(".//Geometry/Nodes/node[@id='2']").text == "2,3.142"
+
+
 def test_builder_creates_case_folder(tmp_path: Path) -> None:
     template_path = _write_template(tmp_path)
     template = FebTemplate(template_path, bindings=[])

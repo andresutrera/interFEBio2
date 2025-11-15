@@ -131,11 +131,16 @@ class EvaluationBinding:
         Expression or callable producing a numeric value from ``theta``.
     required
         Same semantics as :class:`ParameterBinding`.
+    text_template
+        Optional :py:meth:`str.format` template receiving the formatted value
+        via the ``value`` placeholder, useful for nodes that contain mixed text
+        such as ``"2,{value}"`` in load curves.
     """
 
     xpath: str
     value: str | Callable[[Mapping[str, Number]], Number]
     required: bool = True
+    text_template: str | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.value, str):
@@ -167,6 +172,13 @@ class EvaluationBinding:
             return
 
         text = ctx.format_value(self._resolve_value(theta))
+        if self.text_template is not None:
+            try:
+                text = self.text_template.format(value=text)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise ValueError(
+                    f"Failed to format template '{self.text_template}': {exc}"
+                ) from exc
         for node in nodes:
             node.text = text
 
