@@ -132,7 +132,7 @@ def _material_bindings_long() -> list[ParameterBinding | EvaluationBinding]:
         ParameterBinding(theta_name="k2", xpath=f"{base}/k2"),
         ParameterBinding(theta_name="kappa", xpath=f"{base}/kappa"),
         ParameterBinding(theta_name="gamma", xpath=f"{base}/gamma"),
-        EvaluationBinding(xpath=f"{base}/k", value="100 * k1"),
+        EvaluationBinding(xpath=f"{base}/k", value="300 * k1"),
     ]
 
 
@@ -145,13 +145,13 @@ def _material_bindings_ring() -> list[ParameterBinding | EvaluationBinding]:
         ParameterBinding(theta_name="k2", xpath=f"{elastic}/k2"),
         ParameterBinding(theta_name="kappa", xpath=f"{elastic}/kappa"),
         ParameterBinding(theta_name="gamma", xpath=f"{elastic}/gamma"),
-        EvaluationBinding(xpath=f"{base}/k", value="100 * k1"),
+        EvaluationBinding(xpath=f"{base}/k", value="300 * k1"),
         # Scale the final load-curve point with the current k1 value
-        EvaluationBinding(
-            xpath=".//LoadData/load_controller[@id='3']/points/pt[4]",
-            value="500 * k1",
-            text_template="2,{value}",
-        ),
+        # EvaluationBinding(
+        #     xpath=".//LoadData/load_controller[@id='3']/points/pt[4]",
+        #     value="500 * k1",
+        #     text_template="2,{value}",
+        # ),
     ]
 
 
@@ -189,8 +189,8 @@ def main() -> None:
         grid=GridPolicyOptions(policy="exp_to_sim"),
         jacobian=JacobianOptions(enabled=True, perturbation=1e-4, parallel=True),
         cleanup=CleanupOptions(remove_previous=False, mode="none"),
-        runner=RunnerOptions(jobs=3, command=FEBIO_COMMAND),
-        storage=StorageOptions(mode="disk", root=WORK_ROOT),
+        runner=RunnerOptions(jobs=6, command=FEBIO_COMMAND),
+        storage=StorageOptions(mode="tmp", root=WORK_ROOT),
         monitor=MonitorOptions(enabled=True),
         optimizer=OptimizerOptions(
             name="least_squares",
