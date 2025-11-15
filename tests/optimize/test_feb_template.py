@@ -5,6 +5,7 @@ import pytest
 
 from interFEBio.Optimize.feb_bindings import (
     BuildContext,
+    EvaluationBinding,
     FebBuilder,
     FebTemplate,
     ParameterBinding,
@@ -95,6 +96,40 @@ def test_template_write_creates_parent(tmp_path: Path) -> None:
     assert out_path.exists()
     tree = ET.parse(out_path)
     assert tree.getroot().tag == "febio_spec"
+
+
+def test_evaluation_binding_expression(tmp_path: Path) -> None:
+    template_path = _write_template(tmp_path)
+    template = FebTemplate(
+        template_path,
+        bindings=[
+            EvaluationBinding(
+                xpath=".//Material/material[@id='1']/v",
+                value="(node_1 + young) / 2",
+            )
+        ],
+    )
+
+    theta = {"node_1": 4.0, "young": 2.0}
+    tree = template.render(theta, ctx=BuildContext(fmt="%.2f"))
+    assert tree.getroot().find(".//Material/material[@id='1']/v").text == "3.00"
+
+
+def test_evaluation_binding_callable(tmp_path: Path) -> None:
+    template_path = _write_template(tmp_path)
+    template = FebTemplate(
+        template_path,
+        bindings=[
+            EvaluationBinding(
+                xpath=".//Control/max_ups",
+                value=lambda theta: theta["node_1"] * 10.0,
+            )
+        ],
+    )
+
+    theta = {"node_1": 3.0}
+    tree = template.render(theta, ctx=BuildContext(fmt="%.1f"))
+    assert tree.getroot().find(".//Control/max_ups").text == "30.0"
 
 
 def test_builder_creates_case_folder(tmp_path: Path) -> None:

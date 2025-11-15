@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ast
+import operator
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Mapping, cast
+from typing import Callable, Dict, Mapping, cast
 
 Number = float
 
@@ -65,12 +67,119 @@ class ParameterBinding:
             node.text = text
 
 
+class _ExpressionEvaluator:
+    """Evaluate a restricted Python expression against mapping values."""
+
+    _BIN_OPS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.Mod: operator.mod,
+    }
+    _UNARY_OPS = {
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+    }
+
+    def __init__(self, expression: str):
+        try:
+            tree = ast.parse(expression, mode="eval")
+        except SyntaxError as exc:  # pragma: no cover - exercised in tests
+            raise ValueError(f"Invalid expression '{expression}': {exc}") from exc
+        self._tree = tree
+
+    def evaluate(self, theta: Mapping[str, Number]) -> Number:
+        return float(self._eval(self._tree.body, theta))
+
+    def _eval(self, node: ast.AST, theta: Mapping[str, Number]) -> Number:
+        if isinstance(node, ast.Expression):
+            return self._eval(node.body, theta)
+        if isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+            if op_type not in self._BIN_OPS:
+                raise ValueError(f"Unsupported operator in expression: {op_type.__name__}")
+            left = self._eval(node.left, theta)
+            right = self._eval(node.right, theta)
+            return float(self._BIN_OPS[op_type](left, right))
+        if isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+            if op_type not in self._UNARY_OPS:
+                raise ValueError(f"Unsupported operator in expression: {op_type.__name__}")
+            return float(self._UNARY_OPS[op_type](self._eval(node.operand, theta)))
+        if isinstance(node, ast.Constant):
+            if not isinstance(node.value, (int, float)):
+                raise ValueError("Only numeric constants are permitted in expressions")
+            return float(node.value)
+        if isinstance(node, ast.Name):
+            if node.id not in theta:
+                raise KeyError(f"theta value '{node.id}' not provided")
+            return float(theta[node.id])
+        raise ValueError(f"Unsupported expression element: {ast.dump(node)}")
+
+
+@dataclass
+class EvaluationBinding:
+    """Bind an XPath to a value derived from multiple θ parameters.
+
+    Parameters
+    ----------
+    xpath
+        XPath targeting the XML node(s) to update.
+    value
+        Expression or callable producing a numeric value from ``theta``.
+    required
+        Same semantics as :class:`ParameterBinding`.
+    """
+
+    xpath: str
+    value: str | Callable[[Mapping[str, Number]], Number]
+    required: bool = True
+
+    def __post_init__(self) -> None:
+        if isinstance(self.value, str):
+            self._expr = _ExpressionEvaluator(self.value)
+            self._callable: Callable[[Mapping[str, Number]], Number] | None = None
+        elif callable(self.value):
+            self._callable = self.value
+            self._expr = None
+        else:  # pragma: no cover - defensive
+            raise TypeError("value must be a string expression or callable")
+
+    def _resolve_value(self, theta: Mapping[str, Number]) -> Number:
+        if self._expr is not None:
+            return self._expr.evaluate(theta)
+        if self._callable is not None:
+            return float(self._callable(theta))
+        raise RuntimeError("No evaluator available")
+
+    def apply(
+        self,
+        root: ET.Element,
+        theta: Mapping[str, Number],
+        ctx: BuildContext,
+    ) -> None:
+        nodes = root.findall(self.xpath, namespaces=ctx.namespaces or None)
+        if not nodes:
+            if self.required:
+                raise ValueError(f"No nodes matched XPath: {self.xpath}")
+            return
+
+        text = ctx.format_value(self._resolve_value(theta))
+        for node in nodes:
+            node.text = text
+
+
+Binding = ParameterBinding | EvaluationBinding
+
+
 @dataclass
 class FebTemplate:
     """FEBio template plus bindings applied during rendering."""
 
     template_path: Path | str
-    bindings: list[ParameterBinding] = field(default_factory=list)
+    bindings: list[Binding] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.template_path = Path(self.template_path)
@@ -79,7 +188,7 @@ class FebTemplate:
         # Normalise bindings to a list for repeated iteration
         self.bindings = list(self.bindings)
 
-    def add_binding(self, binding: ParameterBinding) -> None:
+    def add_binding(self, binding: Binding) -> None:
         """Register an additional binding for this template."""
         self.bindings.append(binding)
 
@@ -136,6 +245,7 @@ class FebBuilder:
 __all__ = [
     "BuildContext",
     "ParameterBinding",
+    "EvaluationBinding",
     "FebTemplate",
     "FebBuilder",
 ]

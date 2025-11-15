@@ -10,7 +10,12 @@ from interFEBio.Optimize.adapters import SimulationAdapter
 from interFEBio.Optimize.cases import SimulationCase
 from interFEBio.Optimize.engine import Engine
 from interFEBio.Optimize.experiments import ExperimentSeries
-from interFEBio.Optimize.feb_bindings import BuildContext, FebTemplate, ParameterBinding
+from interFEBio.Optimize.feb_bindings import (
+    BuildContext,
+    EvaluationBinding,
+    FebTemplate,
+    ParameterBinding,
+)
 from interFEBio.Optimize.options import (
     CleanupOptions,
     EngineOptions,
@@ -117,20 +122,21 @@ def build_parameter_space() -> ParameterSpace:
     return space
 
 
-def _material_bindings_long() -> list[ParameterBinding]:
+def _material_bindings_long() -> list[ParameterBinding | EvaluationBinding]:
     base = ".//Material/material[@id='1']"
-    elastic = f"{base}//elastic"
+    # The 'k' parameter remains constant during optimisation and is thus
+    # derived from the varying k1 value via an evaluation binding.
     return [
         ParameterBinding(theta_name="c", xpath=f"{base}/c"),
         ParameterBinding(theta_name="k1", xpath=f"{base}/k1"),
         ParameterBinding(theta_name="k2", xpath=f"{base}/k2"),
         ParameterBinding(theta_name="kappa", xpath=f"{base}/kappa"),
         ParameterBinding(theta_name="gamma", xpath=f"{base}/gamma"),
-        # ParameterBinding(theta_name="k", xpath=f"{base}/k"),
+        EvaluationBinding(xpath=f"{base}/k", value="100 * k1"),
     ]
 
 
-def _material_bindings_ring() -> list[ParameterBinding]:
+def _material_bindings_ring() -> list[ParameterBinding | EvaluationBinding]:
     base = ".//Material/material[@id='1']"
     elastic = f"{base}//elastic"
     return [
@@ -139,7 +145,7 @@ def _material_bindings_ring() -> list[ParameterBinding]:
         ParameterBinding(theta_name="k2", xpath=f"{elastic}/k2"),
         ParameterBinding(theta_name="kappa", xpath=f"{elastic}/kappa"),
         ParameterBinding(theta_name="gamma", xpath=f"{elastic}/gamma"),
-        # ParameterBinding(theta_name="k", xpath=f"{base}/k"),
+        EvaluationBinding(xpath=f"{base}/k", value="100 * k1"),
     ]
 
 
