@@ -73,7 +73,6 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
 
         def _logged_fun(x: np.ndarray) -> np.ndarray:
             vec = np.asarray(x, dtype=float)
-            print("fun")
             resid = fun(vec)
             # print("fun result", resid)
             return resid
@@ -84,7 +83,6 @@ class ScipyLeastSquaresAdapter(OptimizerAdapter):
 
             def _logged_jac(x: np.ndarray) -> np.ndarray:
                 vec = np.asarray(x, dtype=float)
-                print("jac")
                 mat = jac(vec)
                 # print("jac result", mat)
                 return mat
