@@ -700,6 +700,7 @@ class Engine:
 
     def _progress_printer(self) -> Callable[[Array, float], None]:
         """Return a callback that logs iteration summaries."""
+
         def callback(phi_vec: Array, cost: float) -> None:
             self._record_iteration_progress(phi_vec, cost, log_output=True)
 
@@ -1226,12 +1227,17 @@ class Engine:
     def _initMsg(self):
         """Emit a small banner when the engine is constructed."""
         banner_lines = [
-            " _       _            _____ _____ ____  _      ",
+            "",
+            "================================================",
+            " _       _            _____ _____ ____  _       ",
             "(_)_ __ | |_ ___ _ __|  ___| ____| __ )(_) ___  ",
             "| | '_ \| __/ _ \ '__| |_  |  _| |  _ \| |/ _ \ ",
             "| | | | | ||  __/ |  |  _| | |___| |_) | | (_) |",
             "|_|_| |_|\__\___|_|  |_|   |_____|____/|_|\___/ ",
             "                                                ",
+            "              Optimization Engine               ",
+            "================================================",
+            "",
         ]
         self._logger.info("\n" + "\n".join(banner_lines))
 
