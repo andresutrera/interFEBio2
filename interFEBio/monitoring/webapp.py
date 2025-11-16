@@ -233,11 +233,32 @@ HOME_HEAD = textwrap.dedent(
         .collapse-toggle { margin-right: 0; padding: 0.3rem 0.9rem; font-size: 0.78rem; }
         .panel.collapsed .collapsible-body { display: none; }
         .panel.collapsed { padding-bottom: 0.6rem; }
+        .runs-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+        .runs-actions .action-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .selection-toolbar { display: none; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0.75rem; border-radius: 999px; background: rgba(255,255,255,0.06); margin-bottom: 0.5rem; }
+        body.light .selection-toolbar { background: rgba(31,36,48,0.12); }
+        #runsPanel.selecting .selection-toolbar { display: flex; }
+        .selection-toolbar strong { font-size: 0.85rem; letter-spacing: 0.02rem; text-transform: uppercase; }
+        .selection-toolbar-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+        .button-danger { background: linear-gradient(135deg, #f87171, #ef4444); }
+        .button-danger:hover { box-shadow: 0 8px 16px rgba(239, 68, 68, 0.35); }
         table { border-collapse: collapse; width: 100%; background: var(--table-bg); border-radius: 8px; overflow: hidden; }
         th, td { padding: 0.6rem 0.8rem; text-align: left; font-size: 0.9rem; }
         th { background: var(--table-header-bg); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05rem; }
         tr:nth-child(even) { background: var(--table-row-alt); }
         tr:hover { background: var(--table-row-hover); }
+        .select-col, .select-cell { width: 36px; text-align: center; }
+        #runsPanel:not(.selecting) .select-col,
+        #runsPanel:not(.selecting) .select-cell { display: none; }
+        .row-select { width: 22px; height: 22px; border-radius: 8px; border: 1px solid var(--ghost-button-border); background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s ease, border-color 0.2s ease; }
+        .row-select::after { content: ''; width: 10px; height: 10px; border-radius: 4px; background: transparent; transition: background 0.2s ease; }
+        .row-select:hover { border-color: #94a3b8; }
+        .row-select.selected { border-color: #f87171; background: rgba(248, 113, 113, 0.15); }
+        .row-select.selected::after { background: #f87171; }
+        #runsPanel.selecting tr { cursor: pointer; }
+        #runsPanel.selecting tr.selected { background: rgba(56, 189, 248, 0.18); }
+        #runsPanel.selecting .deleteBtn { display: none; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
         .status { font-weight: 600; text-transform: uppercase; letter-spacing: 0.03rem; }
         .status.finished { color: #81d887; }
         .status.failed { color: #ff6b6b; }
@@ -299,13 +320,24 @@ HOME_BODY = textwrap.dedent(
       <div class="layout">
         <section class="panel" id="runsPanel">
           <h2>Active Runs</h2>
-          <div style="display:flex; gap:0.5rem; margin-bottom:0.6rem;">
-            <button id="refresh">Refresh</button>
-            <button id="deleteAll">Delete All</button>
+          <div class="runs-actions">
+            <div class="action-buttons">
+              <button id="refresh">Refresh</button>
+              <button id="deleteAll">Delete All</button>
+            </div>
+            <button id="toggleSelection" class="ghost-button" type="button">Select runs</button>
+          </div>
+          <div class="selection-toolbar" id="selectionToolbar" hidden>
+            <strong id="selectionCount">0 selected</strong>
+            <div class="selection-toolbar-actions">
+              <button id="bulkDeleteSelected" class="button-danger" type="button" disabled>Delete selected</button>
+              <button id="cancelSelection" class="ghost-button" type="button">Cancel</button>
+            </div>
           </div>
           <table>
             <thead>
               <tr>
+                <th class="select-col" aria-label="Select"></th>
                 <th>Run</th>
                 <th>Status</th>
                 <th>Iterations</th>
@@ -315,7 +347,7 @@ HOME_BODY = textwrap.dedent(
               </tr>
             </thead>
             <tbody id="runRows">
-              <tr><td colspan="6">Loading...</td></tr>
+              <tr><td colspan="7">Loading...</td></tr>
             </tbody>
           </table>
         </section>
@@ -388,6 +420,12 @@ HOME_BODY = textwrap.dedent(
         const diskPiesEl = document.getElementById('diskPies');
         const systemSummaryEl = document.getElementById('systemSummary');
         const diskSummaryEl = document.getElementById('diskSummary');
+        const runsPanel = document.getElementById('runsPanel');
+        const toggleSelectionBtn = document.getElementById('toggleSelection');
+        const selectionToolbar = document.getElementById('selectionToolbar');
+        const selectionCountEl = document.getElementById('selectionCount');
+        const bulkDeleteBtn = document.getElementById('bulkDeleteSelected');
+        const cancelSelectionBtn = document.getElementById('cancelSelection');
         let systemPanel = document.getElementById('systemPanel');
         let systemContent = document.getElementById('systemContent');
         let toggleSystemPanelBtn = document.getElementById('toggleSystemPanel');
@@ -397,6 +435,8 @@ HOME_BODY = textwrap.dedent(
         let currentSeriesData = {};
         let currentDetailData = null;
         let latestSystemSnapshot = null;
+        const selectedRuns = new Set();
+        let selectionMode = false;
         let systemPanelCollapsed = false;
         const systemHistory = [];
         const maxSystemPoints = 90;
@@ -561,6 +601,70 @@ HOME_BODY = textwrap.dedent(
           if (typeof Plotly !== 'undefined' && Plotly.Plots && typeof Plotly.Plots.resize === 'function') {
             Plotly.Plots.resize(container);
           }
+        }
+        function refreshSelectionStyles() {
+          if (!rows) {
+            return;
+          }
+          const rowNodes = rows.querySelectorAll('tr[data-run]');
+          rowNodes.forEach((row) => {
+            const runId = row.dataset.run;
+            const isSelected = runId && selectedRuns.has(runId);
+            row.classList.toggle('selected', Boolean(isSelected && selectionMode));
+            const toggleBtn = row.querySelector('.row-select');
+            if (toggleBtn) {
+              const pressed = Boolean(isSelected && selectionMode);
+              toggleBtn.classList.toggle('selected', pressed);
+              toggleBtn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            }
+          });
+        }
+        function updateSelectionToolbar() {
+          if (runsPanel) {
+            runsPanel.classList.toggle('selecting', selectionMode);
+          }
+          if (selectionToolbar) {
+            selectionToolbar.hidden = !selectionMode;
+          }
+          if (selectionCountEl) {
+            selectionCountEl.textContent = `${selectedRuns.size} selected`;
+          }
+          if (bulkDeleteBtn) {
+            bulkDeleteBtn.disabled = !selectionMode || !selectedRuns.size;
+          }
+          if (toggleSelectionBtn) {
+            toggleSelectionBtn.textContent = selectionMode ? 'Done selecting' : 'Select runs';
+          }
+        }
+        function enterSelectionMode() {
+          if (selectionMode) {
+            return;
+          }
+          selectionMode = true;
+          selectedRuns.clear();
+          updateSelectionToolbar();
+          refreshSelectionStyles();
+        }
+        function exitSelectionMode() {
+          if (!selectionMode) {
+            return;
+          }
+          selectionMode = false;
+          selectedRuns.clear();
+          updateSelectionToolbar();
+          refreshSelectionStyles();
+        }
+        function toggleRunSelection(runId) {
+          if (!selectionMode || !runId) {
+            return;
+          }
+          if (selectedRuns.has(runId)) {
+            selectedRuns.delete(runId);
+          } else {
+            selectedRuns.add(runId);
+          }
+          refreshSelectionStyles();
+          updateSelectionToolbar();
         }
         function ensureSystemPanelElements() {
           if (!systemPanel) {
@@ -843,14 +947,20 @@ HOME_BODY = textwrap.dedent(
 
         async function loadRuns(showLoading = true) {
           if (showLoading && !lastTableHtml) {
-            rows.innerHTML = "<tr><td colspan='6'>Loading...</td></tr>";
+            rows.innerHTML = "<tr><td colspan='7'>Loading...</td></tr>";
           }
           try {
             const res = await fetch('/api/runs', { cache: 'no-store' });
             const data = await res.json();
+            const activeIds = new Set(data.map(run => run.run_id));
+            Array.from(selectedRuns).forEach((runId) => {
+              if (!activeIds.has(runId)) {
+                selectedRuns.delete(runId);
+              }
+            });
             let html;
             if (!data.length) {
-              html = "<tr><td colspan='6'>No runs yet</td></tr>";
+              html = "<tr><td colspan='7'>No runs yet</td></tr>";
             } else {
               html = data
                 .map(run => {
@@ -858,8 +968,16 @@ HOME_BODY = textwrap.dedent(
                   const label = run.label || run.run_id;
                   const last = typeof run.last_cost === 'number' ? run.last_cost.toExponential(3) : '-';
                   const updated = run.updated_at ? new Date(run.updated_at * 1000).toLocaleTimeString() : '-';
-                  return `<tr data-run="${run.run_id}">
-                    <td><a href="#" data-run="${run.run_id}">${label}</a></td>
+                  const safeLabel = escapeHtml(label);
+                  const isSelected = selectedRuns.has(run.run_id);
+                  const selectionClass = selectionMode && isSelected ? ' class="selected"' : '';
+                  const pressed = selectionMode && isSelected ? 'true' : 'false';
+                  return `<tr data-run="${run.run_id}"${selectionClass}>
+                    <td class="select-cell">
+                      <button type="button" class="row-select${isSelected ? ' selected' : ''}" data-run="${run.run_id}" aria-pressed="${pressed}" aria-label="${isSelected ? 'Deselect' : 'Select'} ${safeLabel}"></button>
+                      <span class="sr-only">${isSelected ? 'Selected' : 'Not selected'}</span>
+                    </td>
+                    <td><a href="#" data-run="${run.run_id}">${safeLabel}</a></td>
                     <td class="status ${status}">${status}</td>
                     <td>${run.iteration_count}</td>
                     <td>${last}</td>
@@ -872,7 +990,9 @@ HOME_BODY = textwrap.dedent(
             if (html !== lastTableHtml) {
               rows.innerHTML = html;
               lastTableHtml = html;
+              refreshSelectionStyles();
             }
+            updateSelectionToolbar();
             if (selectedRunId) {
               const exists = data.some(run => run.run_id === selectedRunId);
               if (exists) {
@@ -1293,6 +1413,26 @@ HOME_BODY = textwrap.dedent(
           handleSystemPanelToggle(event);
         });
         setSystemPanelCollapsed(false, { skipRender: true });
+        if (toggleSelectionBtn) {
+          toggleSelectionBtn.addEventListener('click', () => {
+            if (selectionMode) {
+              exitSelectionMode();
+            } else {
+              enterSelectionMode();
+            }
+          });
+        }
+        if (cancelSelectionBtn) {
+          cancelSelectionBtn.addEventListener('click', () => {
+            exitSelectionMode();
+          });
+        }
+        if (bulkDeleteBtn) {
+          bulkDeleteBtn.addEventListener('click', async () => {
+            await deleteSelectedRuns();
+          });
+        }
+        updateSelectionToolbar();
 
         async function deleteRun(runId, force = false, skipConfirm = false) {
           if (!skipConfirm) {
@@ -1330,7 +1470,35 @@ HOME_BODY = textwrap.dedent(
             console.error(err);
           }
         }
-
+        async function deleteSelectedRuns() {
+          if (!selectionMode || !selectedRuns.size) {
+            return;
+          }
+          const confirmBulk = confirm(`Delete ${selectedRuns.size} run(s)?`);
+          if (!confirmBulk) {
+            return;
+          }
+          let previousLabel = null;
+          if (bulkDeleteBtn) {
+            previousLabel = bulkDeleteBtn.textContent;
+            bulkDeleteBtn.disabled = true;
+            bulkDeleteBtn.textContent = 'Deleting...';
+          }
+          const targets = Array.from(selectedRuns);
+          for (const runId of targets) {
+            try {
+              await deleteRun(runId, false, true);
+            } catch (err) {
+              console.error(`Failed to delete run ${runId}`, err);
+            }
+          }
+          if (bulkDeleteBtn && previousLabel !== null) {
+            bulkDeleteBtn.textContent = previousLabel;
+            bulkDeleteBtn.disabled = false;
+          }
+          exitSelectionMode();
+          loadRuns();
+        }
         async function deleteAllRuns(force = false, skipConfirm = false) {
           if (!skipConfirm) {
             const msg = force
@@ -1366,14 +1534,34 @@ HOME_BODY = textwrap.dedent(
 
         rows.addEventListener('click', (event) => {
           const target = event.target;
-          if (target && target.dataset && target.dataset.run) {
-            if (target.classList.contains('deleteBtn')) {
-              event.preventDefault();
-              deleteRun(target.dataset.run);
-            } else {
-              event.preventDefault();
-              showDetail(target.dataset.run);
-            }
+          if (!target) {
+            return;
+          }
+          const selectBtn = target.closest('.row-select');
+          const deleteBtn = target.closest('.deleteBtn');
+          const linkTarget = target.closest('a[data-run]');
+          const row = target.closest('tr[data-run]');
+          const runId =
+            (selectBtn && selectBtn.dataset.run) ||
+            (deleteBtn && deleteBtn.dataset.run) ||
+            (linkTarget && linkTarget.dataset.run) ||
+            (row && row.dataset.run);
+          if (!runId) {
+            return;
+          }
+          if (selectionMode) {
+            event.preventDefault();
+            toggleRunSelection(runId);
+            return;
+          }
+          if (deleteBtn) {
+            event.preventDefault();
+            deleteRun(runId);
+            return;
+          }
+          if (linkTarget) {
+            event.preventDefault();
+            showDetail(runId);
           }
         });
         loadRuns();
