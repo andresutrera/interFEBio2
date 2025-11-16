@@ -228,6 +228,8 @@ class Engine:
         self._series_latest: Dict[str, Dict[str, Any]] = {}
         self._cached_jac_phi: Array | None = None
         self._cached_jacobian: Array | None = None
+        self._pending_initial_log = False
+        self._log_progress = True
 
     # ------------------------------------------------------------------ public API
     def run(
@@ -262,6 +264,8 @@ class Engine:
             self._last_residual = None
             self._last_iter_dir = None
             self._last_metrics = {}
+            self._pending_initial_log = True
+            self._log_progress = bool(verbose)
 
             if phi0 is not None:
                 phi0_vec = cast(Array, np.asarray(phi0, dtype=float))
@@ -295,7 +299,16 @@ class Engine:
 
             def residual_phi(phi_vec: Array) -> Array:
                 phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
-                return self._evaluate_residual(phi_vec)
+                residual = self._evaluate_residual(phi_vec)
+                if self._pending_initial_log:
+                    initial_cost = 0.5 * float(np.dot(residual, residual))
+                    self._record_iteration_progress(
+                        phi_vec,
+                        initial_cost,
+                        log_output=self._log_progress,
+                    )
+                    self._pending_initial_log = False
+                return residual
 
             jac_fn: Callable[[Array], Array] | None = None
             if self.jacobian is not None:
@@ -585,21 +598,40 @@ class Engine:
 
     def _progress_printer(self) -> Callable[[Array, float], None]:
         """Return a callback that logs iteration summaries."""
-        logger = self._logger
-
         def callback(phi_vec: Array, cost: float) -> None:
-            theta_vec = self._phi_to_theta(phi_vec)
+            self._record_iteration_progress(phi_vec, cost, log_output=True)
+
+        return callback
+
+    def _record_iteration_progress(
+        self,
+        phi_vec: Array,
+        cost: float,
+        *,
+        log_output: bool,
+    ) -> None:
+        """Log and emit iteration metrics for the provided φ vector."""
+        theta_vec = self._phi_to_theta(phi_vec)
+        theta_dict: Dict[str, float] = {}
+        for name, phi_value, theta_value in zip(
+            self.parameter_space.names, phi_vec, theta_vec, strict=True
+        ):
+            theta_float = float(theta_value)
+            theta_dict[name] = theta_float
+
+        metrics = self._last_metrics or {}
+        r_squared = metrics.get("r_squared", {})
+        nrmse_val = metrics.get("nrmse")
+        if log_output:
             table = PrettyTable()
             if self._reparam_enabled:
                 table.field_names = ["parameter", "phi", "theta"]
             else:
                 table.field_names = ["parameter", "theta"]
-            theta_dict: Dict[str, float] = {}
             for name, phi_value, theta_value in zip(
                 self.parameter_space.names, phi_vec, theta_vec, strict=True
             ):
                 theta_float = float(theta_value)
-                theta_dict[name] = theta_float
                 if self._reparam_enabled:
                     table.add_row(
                         [
@@ -615,9 +647,6 @@ class Engine:
                             f"{theta_float:.6e}",
                         ]
                     )
-            metrics = self._last_metrics or {}
-            nrmse_val = metrics.get("nrmse")
-            r_squared = metrics.get("r_squared", {})
             if nrmse_val is None or not np.isfinite(nrmse_val):
                 nrmse_display = "nan"
             else:
@@ -633,32 +662,29 @@ class Engine:
                         rsq_table.add_row([key, f"{float(value):.6f}"])
             else:
                 rsq_table.add_row(["-", "-"])
-            param_table = table.get_string()
-            rsq_table_str = rsq_table.get_string()
-            logger.info(
+            self._logger.info(
                 "\n[iter {iter:03d}] cost={cost:.6e} nrmse={nrmse}\n{param_table}\n{rsq_table}",
                 iter=self._progress_index,
                 cost=cost,
                 nrmse=nrmse_display,
-                param_table=param_table,
-                rsq_table=rsq_table_str,
+                param_table=table.get_string(),
+                rsq_table=rsq_table.get_string(),
             )
-            if self._monitor_client is not None:
-                try:
-                    payload_metrics = self._sanitize_metrics(metrics)
-                    self._monitor_client.record_iteration(
-                        index=self._progress_index,
-                        cost=float(cost),
-                        theta=theta_dict,
-                        metrics=payload_metrics,
-                        series=self._series_latest,
-                    )
-                except Exception:
-                    self._logger.exception("Failed to emit monitor iteration event.")
-            self._progress_index += 1
-            self._cleanup_previous_iterations()
 
-        return callback
+        if self._monitor_client is not None:
+            try:
+                payload_metrics = self._sanitize_metrics(metrics)
+                self._monitor_client.record_iteration(
+                    index=self._progress_index,
+                    cost=float(cost),
+                    theta=theta_dict,
+                    metrics=payload_metrics,
+                    series=self._series_latest,
+                )
+            except Exception:
+                self._logger.exception("Failed to emit monitor iteration event.")
+        self._progress_index += 1
+        self._cleanup_previous_iterations()
 
     def _jacobian_label_fn(self) -> Callable[[int], str | None]:
         names = self._param_names

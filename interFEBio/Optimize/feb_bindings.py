@@ -99,14 +99,18 @@ class _ExpressionEvaluator:
         if isinstance(node, ast.BinOp):
             op_type = type(node.op)
             if op_type not in self._BIN_OPS:
-                raise ValueError(f"Unsupported operator in expression: {op_type.__name__}")
+                raise ValueError(
+                    f"Unsupported operator in expression: {op_type.__name__}"
+                )
             left = self._eval(node.left, theta)
             right = self._eval(node.right, theta)
             return float(self._BIN_OPS[op_type](left, right))
         if isinstance(node, ast.UnaryOp):
             op_type = type(node.op)
             if op_type not in self._UNARY_OPS:
-                raise ValueError(f"Unsupported operator in expression: {op_type.__name__}")
+                raise ValueError(
+                    f"Unsupported operator in expression: {op_type.__name__}"
+                )
             return float(self._UNARY_OPS[op_type](self._eval(node.operand, theta)))
         if isinstance(node, ast.Constant):
             if not isinstance(node.value, (int, float)):
