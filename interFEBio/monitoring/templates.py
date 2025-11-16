@@ -203,13 +203,16 @@ class MonitorPageTemplate:
             <h3>Cost per iteration</h3>
             <div id="costChart" class="chart"></div>
           </div>
-          <div class="chart-wrapper">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Experiment vs Simulation</h3>
-              <select id="seriesSelect" class="series-select"></select>
+            <div class="chart-wrapper">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Experiment vs Simulation</h3>
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                  <button id="seriesLiveToggle" class="ghost-button" style="display:none;">Back to latest</button>
+                  <select id="seriesSelect" class="series-select"></select>
+                </div>
+              </div>
+              <div id="seriesChart" class="chart"></div>
             </div>
-            <div id="seriesChart" class="chart"></div>
-          </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.1rem;">
             <h3 style="font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75; margin:0;">Raw JSON</h3>
             <button id="toggleJson" class="ghost-button" style="margin-right:0;">Expand</button>
@@ -257,6 +260,7 @@ class MonitorPageTemplate:
         const closeDetailBtn = document.getElementById('closeDetail');
         const toggleJsonBtn = document.getElementById('toggleJson');
         const seriesSelect = document.getElementById('seriesSelect');
+        const seriesLiveBtn = document.getElementById('seriesLiveToggle');
         const seriesChartEl = document.getElementById('seriesChart');
         const systemChartEl = document.getElementById('systemChart');
         const diskPiesEl = document.getElementById('diskPies');
@@ -275,6 +279,9 @@ class MonitorPageTemplate:
         let selectedRunId = null;
         let lastTableHtml = '';
         let currentSeriesData = {};
+        let iterationSeriesByIndex = {};
+        let latestSeriesIndex = null;
+        let lockedSeriesIndex = null;
         let currentDetailData = null;
         let latestSystemSnapshot = null;
         const selectedRuns = new Set();
@@ -355,6 +362,18 @@ class MonitorPageTemplate:
             }
           }
           return {};
+        }
+        function collectIterationSeries(data) {
+          const iterations = Array.isArray(data?.iterations) ? data.iterations : [];
+          const map = Object.create(null);
+          let latestIndex = null;
+          iterations.forEach((entry, idx) => {
+            if (entry && entry.series && typeof entry.series === 'object' && Object.keys(entry.series).length) {
+              map[idx] = entry.series;
+              latestIndex = idx;
+            }
+          });
+          return { map, latestIndex: typeof latestIndex === 'number' ? latestIndex : null };
         }
         function getCssColor(name, fallback) {
           const value = getComputedStyle(document.body).getPropertyValue(name);
@@ -894,7 +913,23 @@ class MonitorPageTemplate:
           detailTitle.textContent = data.label || data.run_id || 'Run detail';
           renderSummary(data);
           renderIterations(data);
-          renderSeries(extractLatestSeries(data));
+          const seriesInfo = collectIterationSeries(data);
+          iterationSeriesByIndex = seriesInfo.map || {};
+          latestSeriesIndex = typeof seriesInfo.latestIndex === 'number' ? seriesInfo.latestIndex : null;
+          if (lockedSeriesIndex !== null) {
+            const ok = applySeriesFromIndex(lockedSeriesIndex, { lockMode: 'preserve', silent: true });
+            if (!ok && typeof latestSeriesIndex === 'number') {
+              applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
+            } else if (!ok) {
+              renderSeries(null);
+              updateSeriesLockUi();
+            }
+          } else if (typeof latestSeriesIndex === 'number') {
+            applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
+          } else {
+            renderSeries(null);
+            updateSeriesLockUi();
+          }
           if (detailJson) {
             if (refreshJson) {
               const resetJson = detailJson.textContent === '' || detailJson.textContent === '{}';
@@ -1083,9 +1118,35 @@ class MonitorPageTemplate:
             uirevision: 'cost-chart',
           };
           Plotly.react(costChartEl, [trace], layout, plotlyConfig);
+          attachCostChartEvents();
           if (typeof Plotly !== 'undefined' && Plotly.Plots && typeof Plotly.Plots.resize === 'function') {
             Plotly.Plots.resize(costChartEl);
           }
+        }
+
+        function attachCostChartEvents() {
+          if (!costChartEl || typeof costChartEl.on !== 'function') {
+            return;
+          }
+          if (costChartEl.__seriesClickHandler) {
+            return;
+          }
+          const handler = (eventData) => {
+            if (!eventData || !eventData.points || !eventData.points.length) {
+              return;
+            }
+            const point = eventData.points[0];
+            const idx = typeof point.x === 'number' ? Math.round(point.x) : null;
+            if (typeof idx !== 'number') {
+              return;
+            }
+            const success = applySeriesFromIndex(idx, { lockMode: 'lock' });
+            if (!success && seriesChartEl) {
+              renderEmptyPlot(seriesChartEl, `No series data for iteration ${idx}`);
+            }
+          };
+          costChartEl.__seriesClickHandler = handler;
+          costChartEl.on('plotly_click', handler);
         }
 
         function collapseJson() {
@@ -1126,6 +1187,10 @@ class MonitorPageTemplate:
           if (costChartEl) {
             costChartEl.innerHTML = '';
           }
+          iterationSeriesByIndex = {};
+          latestSeriesIndex = null;
+          lockedSeriesIndex = null;
+          updateSeriesLockUi();
         }
 
         function renderSeries(series) {
@@ -1236,9 +1301,65 @@ class MonitorPageTemplate:
           }
         }
 
+        function applySeriesFromIndex(index, { lockMode = 'clear', silent = false } = {}) {
+          if (typeof index !== 'number' || !iterationSeriesByIndex || !Object.prototype.hasOwnProperty.call(iterationSeriesByIndex, index)) {
+            if (!silent) {
+              renderSeries(null);
+            }
+            if (lockMode !== 'preserve') {
+              lockedSeriesIndex = null;
+              updateSeriesLockUi();
+            }
+            return false;
+          }
+          const dataset = iterationSeriesByIndex[index];
+          if (!dataset || !Object.keys(dataset).length) {
+            if (!silent) {
+              renderSeries(null);
+            }
+            if (lockMode !== 'preserve') {
+              lockedSeriesIndex = null;
+              updateSeriesLockUi();
+            }
+            return false;
+          }
+          if (lockMode === 'lock') {
+            lockedSeriesIndex = index;
+          } else if (lockMode === 'clear') {
+            lockedSeriesIndex = null;
+          }
+          renderSeries(dataset);
+          updateSeriesLockUi();
+          return true;
+        }
+
+        function updateSeriesLockUi() {
+          if (!seriesLiveBtn) {
+            return;
+          }
+          if (lockedSeriesIndex === null) {
+            seriesLiveBtn.style.display = 'none';
+            seriesLiveBtn.textContent = 'Back to latest';
+          } else {
+            seriesLiveBtn.style.display = '';
+            seriesLiveBtn.textContent = `Back to latest (iter ${lockedSeriesIndex})`;
+          }
+        }
+
         if (seriesSelect) {
           seriesSelect.addEventListener('change', (event) => {
             renderSeriesChart(event.target.value);
+          });
+        }
+        if (seriesLiveBtn) {
+          seriesLiveBtn.addEventListener('click', () => {
+            lockedSeriesIndex = null;
+            if (typeof latestSeriesIndex === 'number') {
+              applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
+            } else {
+              renderSeries(null);
+              updateSeriesLockUi();
+            }
           });
         }
         document.getElementById('refresh').addEventListener('click', () => loadRuns());

@@ -73,12 +73,12 @@ def main() -> None:
     exp_series = ExperimentSeries(x=exp_data[:, 0], y=exp_data[:, 1])
 
     parameter_space = ParameterSpace(xi=2.0)
-    parameter_space.add_parameter(name="G", theta0=0.5)
+    parameter_space.add_parameter(name="G", theta0=0.5, bounds=(0, 10))
     case = build_case(exp_series, "biax1")
     case2 = build_case(exp_series, "biax2")
 
     options = EngineOptions(
-        jacobian=JacobianOptions(enabled=True, perturbation=1e-4),
+        jacobian=JacobianOptions(enabled=True, perturbation=1e-4, parallel=True),
         cleanup=CleanupOptions(remove_previous=True, mode="retain_best"),
         runner=RunnerOptions(jobs=PARALLEL_JOBS, command=FEBIO_COMMAND),
         storage=StorageOptions(mode="tmp", root=WORK_ROOT),
@@ -89,7 +89,7 @@ def main() -> None:
                 "ftol": 1e-6,
                 "xtol": 1e-6,
             },
-            reparametrize=False,
+            reparametrize=True,
         ),
     )
 

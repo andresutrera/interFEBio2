@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, cast
 
 import numpy as np
 from numpy.typing import NDArray
+
+logger = logging.getLogger(__name__)
 
 Array = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
@@ -145,8 +148,8 @@ class ParameterSpace:
         return cast(Array, theta * self._ln_xi)
 
     def phi_from_theta(self, theta_vec: Array) -> Array:
-        """Map θ values back into φ-space."""
-        theta_vec = cast(Array, np.asarray(theta_vec, dtype=float))
+        """Map θ values back into φ-space, tolerating zero bounds via eps nudging."""
+        theta_vec = self._ensure_positive_theta(theta_vec)
         ratio = theta_vec / self._theta0_vec
         if np.any(ratio <= 0.0):
             raise ValueError("theta must be > 0 elementwise to invert mapping.")
@@ -161,10 +164,12 @@ class ParameterSpace:
         hi = cast(Array, np.full(len(self._names), +np.inf, dtype=float))
         if self._th_lo is not None:
             mask = np.isfinite(self._th_lo)
-            lo[mask] = self.phi_from_theta(self._th_lo)[mask]
+            lo_vals = self.phi_from_theta(self._th_lo)
+            lo[mask] = lo_vals[mask]
         if self._th_hi is not None:
             mask = np.isfinite(self._th_hi)
-            hi[mask] = self.phi_from_theta(self._th_hi)[mask]
+            hi_vals = self.phi_from_theta(self._th_hi)
+            hi[mask] = hi_vals[mask]
         return lo, hi
 
     def theta_bounds_array(self) -> tuple[Array, Array] | None:
@@ -181,6 +186,19 @@ class ParameterSpace:
         else:
             hi = cast(Array, np.full(size, +np.inf, dtype=float))
         return lo.copy(), hi.copy()
+
+    def _ensure_positive_theta(self, theta_vec: Array) -> Array:
+        theta_arr = cast(Array, np.asarray(theta_vec, dtype=float).copy())
+        mask = theta_arr <= 0.0
+        if mask.any():
+            eps = np.finfo(theta_arr.dtype).tiny
+            logger.warning(
+                "theta values %s contain non-positive entries; clamping to %.3e",
+                theta_arr[mask],
+                eps,
+            )
+            theta_arr[mask] = eps
+        return cast(Array, theta_arr)
 
     def clamp_theta(self, theta_vec: Array) -> Array:
         """Clamp θ values according to stored bounds."""
