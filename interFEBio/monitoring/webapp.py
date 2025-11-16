@@ -228,6 +228,11 @@ HOME_HEAD = textwrap.dedent(
         .layout { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start; }
         .panel { background: var(--panel-bg); border-radius: 12px; box-shadow: 0 10px 24px rgba(10, 18, 46, 0.18); padding: 1rem 1.25rem; flex: 1 1 360px; min-width: 320px; transition: background 0.2s ease, color 0.2s ease; }
         .panel h2 { margin-top: 0; font-size: 1.1rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+        .panel-header h2 { margin: 0; }
+        .collapse-toggle { margin-right: 0; padding: 0.3rem 0.9rem; font-size: 0.78rem; }
+        .panel.collapsed .collapsible-body { display: none; }
+        .panel.collapsed { padding-bottom: 0.6rem; }
         table { border-collapse: collapse; width: 100%; background: var(--table-bg); border-radius: 8px; overflow: hidden; }
         th, td { padding: 0.6rem 0.8rem; text-align: left; font-size: 0.9rem; }
         th { background: var(--table-header-bg); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05rem; }
@@ -338,8 +343,17 @@ HOME_BODY = textwrap.dedent(
           <pre id="detailJson" style="max-height:0; overflow:hidden; transition:max-height 0.18s ease; visibility:hidden;">{}</pre>
         </section>
         <section class="panel full-width" id="systemPanel">
-          <h2>Server Health</h2>
-          <div class="stats-grid">
+          <div class="panel-header">
+            <h2>Server Health</h2>
+            <button
+              id="toggleSystemPanel"
+              class="ghost-button collapse-toggle"
+              type="button"
+              aria-controls="systemContent"
+              aria-expanded="true"
+            >Collapse</button>
+          </div>
+          <div class="stats-grid collapsible-body" id="systemContent">
             <div class="chart-wrapper">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
                 <h3 style="margin:0;">CPU &amp; Memory</h3>
@@ -374,12 +388,16 @@ HOME_BODY = textwrap.dedent(
         const diskPiesEl = document.getElementById('diskPies');
         const systemSummaryEl = document.getElementById('systemSummary');
         const diskSummaryEl = document.getElementById('diskSummary');
+        let systemPanel = document.getElementById('systemPanel');
+        let systemContent = document.getElementById('systemContent');
+        let toggleSystemPanelBtn = document.getElementById('toggleSystemPanel');
         let jsonExpanded = false;
         let selectedRunId = null;
         let lastTableHtml = '';
         let currentSeriesData = {};
         let currentDetailData = null;
         let latestSystemSnapshot = null;
+        let systemPanelCollapsed = false;
         const systemHistory = [];
         const maxSystemPoints = 90;
         const themeStorageKey = 'interfebio-monitor-theme';
@@ -544,6 +562,54 @@ HOME_BODY = textwrap.dedent(
             Plotly.Plots.resize(container);
           }
         }
+        function ensureSystemPanelElements() {
+          if (!systemPanel) {
+            systemPanel = document.getElementById('systemPanel');
+          }
+          if (!systemContent) {
+            systemContent = document.getElementById('systemContent');
+          }
+          if (!toggleSystemPanelBtn) {
+            toggleSystemPanelBtn = document.getElementById('toggleSystemPanel');
+          }
+        }
+        function setSystemPanelCollapsed(collapsed, { skipRender = false } = {}) {
+          ensureSystemPanelElements();
+          systemPanelCollapsed = Boolean(collapsed);
+          if (systemContent) {
+            systemContent.hidden = systemPanelCollapsed;
+            systemContent.setAttribute('aria-hidden', systemPanelCollapsed ? 'true' : 'false');
+          }
+          if (systemPanel) {
+            systemPanel.classList.toggle('collapsed', systemPanelCollapsed);
+          }
+          if (toggleSystemPanelBtn) {
+            toggleSystemPanelBtn.textContent = systemPanelCollapsed ? 'Expand' : 'Collapse';
+            toggleSystemPanelBtn.setAttribute('aria-expanded', systemPanelCollapsed ? 'false' : 'true');
+          }
+          if (!systemPanelCollapsed && !skipRender) {
+            if (hasPlotly() && systemChartEl && Plotly.Plots && typeof Plotly.Plots.resize === 'function') {
+              try {
+                Plotly.Plots.resize(systemChartEl);
+              } catch (err) {
+                // ignore resize errors
+              }
+            }
+            renderSystemUsage();
+            renderDiskPies();
+          }
+        }
+        function handleSystemPanelToggle(event) {
+          if (event) {
+            if (typeof event.preventDefault === 'function') {
+              event.preventDefault();
+            }
+            if (typeof event.stopPropagation === 'function') {
+              event.stopPropagation();
+            }
+          }
+          setSystemPanelCollapsed(!systemPanelCollapsed);
+        }
         function pushSystemHistory(snapshot) {
           if (!snapshot || typeof snapshot.timestamp !== 'number') {
             return;
@@ -573,7 +639,7 @@ HOME_BODY = textwrap.dedent(
           systemSummaryEl.textContent = `${cpuText} • ${memPercent}`;
         }
         function renderSystemUsage() {
-          if (!systemChartEl) {
+          if (!systemChartEl || systemPanelCollapsed) {
             return;
           }
           if (!systemHistory.length) {
@@ -651,6 +717,29 @@ HOME_BODY = textwrap.dedent(
           const disks = latestSystemSnapshot && Array.isArray(latestSystemSnapshot.disks)
             ? latestSystemSnapshot.disks
             : [];
+          if (!disks.length) {
+            diskPiesEl.innerHTML = '<p style="margin:0; color:var(--muted-text);">No disk data.</p>';
+            if (diskSummaryEl) {
+              diskSummaryEl.textContent = 'No disks';
+            }
+            return;
+          }
+          let totalBytes = 0;
+          let freeBytes = 0;
+          const diskData = disks.map((disk, idx) => {
+            const used = typeof disk.used === 'number' ? disk.used : 0;
+            const available = typeof disk.free === 'number' ? disk.free : 0;
+            const diskTotal = typeof disk.total === 'number' ? disk.total : used + available;
+            totalBytes += diskTotal;
+            freeBytes += available;
+            return { disk, idx, used, available, diskTotal };
+          });
+          if (diskSummaryEl) {
+            diskSummaryEl.textContent = `${formatBytes(freeBytes)} free / ${formatBytes(totalBytes)}`;
+          }
+          if (systemPanelCollapsed) {
+            return;
+          }
           if (hasPlotly()) {
             const prevCharts = diskPiesEl.querySelectorAll('.disk-chart');
             prevCharts.forEach((node) => {
@@ -662,22 +751,9 @@ HOME_BODY = textwrap.dedent(
             });
           }
           diskPiesEl.innerHTML = '';
-          if (!disks.length) {
-            diskPiesEl.innerHTML = '<p style="margin:0; color:var(--muted-text);">No disk data.</p>';
-            if (diskSummaryEl) {
-              diskSummaryEl.textContent = 'No disks';
-            }
-            return;
-          }
           const colors = chartColors();
           const cardBg = colors.card || colors.bg;
-          let total = 0;
-          let free = 0;
-          disks.forEach((disk, idx) => {
-            const used = typeof disk.used === 'number' ? disk.used : 0;
-            const available = typeof disk.free === 'number' ? disk.free : 0;
-            total += typeof disk.total === 'number' ? disk.total : used + available;
-            free += available;
+          diskData.forEach(({ disk, idx, used, available, diskTotal }) => {
             const card = document.createElement('div');
             card.className = 'disk-pie';
             const heading = document.createElement('h4');
@@ -688,7 +764,7 @@ HOME_BODY = textwrap.dedent(
             card.appendChild(chart);
             const percentLabel = typeof disk.percent === 'number' ? disk.percent.toFixed(1) : '0.0';
             const caption = document.createElement('p');
-            caption.textContent = `${formatBytes(available)} free of ${formatBytes(disk.total)} (${percentLabel}% used)`;
+            caption.textContent = `${formatBytes(available)} free of ${formatBytes(diskTotal)} (${percentLabel}% used)`;
             card.appendChild(caption);
             diskPiesEl.appendChild(card);
             if (!hasPlotly()) {
@@ -735,9 +811,6 @@ HOME_BODY = textwrap.dedent(
               plotlyConfig,
             );
           });
-          if (diskSummaryEl) {
-            diskSummaryEl.textContent = `${formatBytes(free)} free / ${formatBytes(total)}`;
-          }
         }
         async function loadSystemMetrics(initial = false) {
           if (!systemChartEl && !diskPiesEl) {
@@ -1206,6 +1279,20 @@ HOME_BODY = textwrap.dedent(
             collapseJson();
           }
         });
+        ensureSystemPanelElements();
+        if (toggleSystemPanelBtn && systemPanel && systemContent) {
+          toggleSystemPanelBtn.addEventListener('click', handleSystemPanelToggle);
+        }
+        document.addEventListener('click', (event) => {
+          const target = event && event.target && typeof event.target.closest === 'function'
+            ? event.target.closest('#toggleSystemPanel')
+            : null;
+          if (!target) {
+            return;
+          }
+          handleSystemPanelToggle(event);
+        });
+        setSystemPanelCollapsed(false, { skipRender: true });
 
         async function deleteRun(runId, force = false, skipConfirm = false) {
           if (!skipConfirm) {
