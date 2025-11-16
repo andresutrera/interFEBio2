@@ -27,6 +27,11 @@ class ResidualAssembler:
         Interpolation helper used to project data onto the chosen grid.
     weight_fn
         Optional callable that produces weights for the residual vector given the grid.
+    Notes
+    -----
+    The assembler performs linear extrapolation when the target grid extends
+    beyond the available data and applies spacing-derived weights so that
+    non-uniform grids do not bias the optimisation cost.
     """
 
     grid: EvaluationGrid
@@ -66,8 +71,7 @@ class ResidualAssembler:
             experiments: Experimental data per identifier.
             simulations: Simulation outputs per identifier.
             target_grids: Optional mapping overriding the evaluation grid per
-                experiment. When provided the clip-to-overlap step is skipped
-                and the supplied grid is used verbatim.
+                experiment. When provided the supplied grid is used verbatim.
         """
         residuals: List[Array] = []
         slices: Dict[str, slice] = {}
@@ -88,7 +92,6 @@ class ResidualAssembler:
                 )
             else:
                 target = self.grid.select_grid(x_exp, x_sim)
-                target = self._clip_target(target, x_exp, x_sim)
             y_exp_interp = self.aligner.map(x_exp, y_exp, target)
             y_sim_interp = self.aligner.map(x_sim, y_sim, target)
             delta = y_sim_interp - y_exp_interp
@@ -103,6 +106,13 @@ class ResidualAssembler:
                     weights_applied = cast(Array, np.asarray(weight, dtype=float))
             elif self.weight_fn is not None:
                 weights_applied = self.weight_fn(target)
+
+            spacing_weights = self._grid_weights(target)
+            if spacing_weights is not None:
+                if weights_applied is None:
+                    weights_applied = spacing_weights
+                else:
+                    weights_applied = weights_applied * spacing_weights
 
             if weights_applied is not None:
                 res = res * weights_applied
@@ -123,20 +133,23 @@ class ResidualAssembler:
             return empty, {}, {}
         return cast(Array, np.concatenate(residuals)), slices, details
 
-    def _clip_target(self, target: Array, x_exp: Array, x_sim: Array) -> Array:
-        """Restrict target grid to overlap between experimental and simulation domains."""
-        if target.size == 0 or self.grid.policy == "fixed_user":
-            return target
-        if x_exp.size == 0 or x_sim.size == 0:
-            return target
-        lo = max(float(np.min(x_exp)), float(np.min(x_sim)))
-        hi = min(float(np.max(x_exp)), float(np.max(x_sim)))
-        if lo > hi:
-            return target
-        mask = (target >= lo) & (target <= hi)
-        if not np.any(mask):
-            return target
-        return cast(Array, np.asarray(target[mask], dtype=float))
+    @staticmethod
+    def _grid_weights(grid: Array) -> Array | None:
+        """Return spacing-derived weights to mitigate non-uniform sampling bias."""
+        if grid.size <= 1:
+            return None
+        grid = cast(Array, np.asarray(grid, dtype=float).reshape(-1))
+        spacing = np.diff(grid)
+        spacing = np.abs(spacing)
+        weights = np.empty_like(grid)
+        weights[1:-1] = 0.5 * (spacing[:-1] + spacing[1:])
+        weights[0] = spacing[0]
+        weights[-1] = spacing[-1]
+        mean = float(np.mean(weights))
+        if mean <= 0.0:
+            return None
+        normalized = weights / mean
+        return cast(Array, np.sqrt(normalized))
 
 
 __all__ = ["ResidualAssembler"]

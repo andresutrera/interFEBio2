@@ -25,7 +25,7 @@ from prettytable import PrettyTable
 
 from ..Log import Log
 from ..monitoring.client import MonitorConfig, OptimizationMonitorClient
-from .alignment import Aligner, EvaluationGrid, GridPolicy
+from .alignment import Aligner, EvaluationGrid
 from .cases import SimulationCase
 from .jacobian import JacobianComputer
 from .optimizers import (
@@ -34,7 +34,7 @@ from .optimizers import (
     ScipyLeastSquaresAdapter,
     ScipyMinimizeAdapter,
 )
-from .options import EngineOptions
+from .options import EngineOptions, GridPolicyOptions
 from .Parameters import ParameterSpace
 from .residuals import ResidualAssembler
 from .runners import LocalParallelRunner, LocalSerialRunner, RunHandle, Runner
@@ -60,6 +60,7 @@ class _CaseState:
     case: SimulationCase
     experiments: Dict[str, tuple[Array, Array, Array | None]]
     name: str
+    grid_policies: Dict[str, GridPolicyOptions]
 
 
 class Engine:
@@ -84,8 +85,6 @@ class Engine:
         self.options = options = options or EngineOptions()
         self.parameter_space = parameter_space
         self._param_names = list(self.parameter_space.names)
-        grid_policy = options.grid.policy
-        grid_values = options.grid.values
         jacobian_opts = options.jacobian
         cleanup_opts = options.cleanup
         runner_opts = options.runner
@@ -120,15 +119,9 @@ class Engine:
         self.optimizer_adapter = self._build_optimizer(
             optimizer_opts.name, optimizer_settings
         )
-        self.grid = EvaluationGrid(
-            policy=grid_policy,
-            common_grid=None
-            if grid_values is None
-            else cast(Array, np.asarray(grid_values, dtype=float)),
-        )
         self.aligner = Aligner()
         self.residual_assembler = ResidualAssembler(
-            grid=self.grid, aligner=self.aligner
+            grid=EvaluationGrid(policy="exp_to_sim"), aligner=self.aligner
         )
 
         if storage_mode not in {"disk", "tmp"}:
@@ -175,11 +168,9 @@ class Engine:
             )
 
         self._cases: List[_CaseState] = []
-        self._case_grid_cache: Dict[str, Dict[str, Array]] = {}
 
         for case in cases:
             experiments: Dict[str, tuple[Array, Array, Array | None]] = {}
-            grid_overrides: Dict[str, Array | None] = {}
             for name, series in case.experiments.items():
                 x, y, weight = series.weighted()
                 x_arr = cast(Array, np.asarray(x, dtype=float))
@@ -190,26 +181,22 @@ class Engine:
                     else cast(Array, np.asarray(weight, dtype=float))
                 )
                 experiments[name] = (x_arr, y_arr, w_arr)
-                grid_val = series.evaluation_grid()
-                if grid_val is not None:
-                    grid_overrides[name] = cast(
-                        Array, np.asarray(grid_val, dtype=float).reshape(-1)
-                    )
+            grid_policies: Dict[str, GridPolicyOptions] = {}
+            for name in experiments.keys():
+                if hasattr(case, "grid_policy"):
+                    policy = case.grid_policy(name)  # type: ignore[attr-defined]
                 else:
-                    grid_overrides[name] = None
+                    policy = GridPolicyOptions()
+                grid_policies[name] = policy
             case_name = self._resolve_case_name(case)
             self._cases.append(
                 _CaseState(
                     case=case,
                     experiments=experiments,
                     name=case_name,
+                    grid_policies=grid_policies,
                 )
             )
-            self._case_grid_cache[case_name] = {
-                exp_name: grid
-                for exp_name, grid in grid_overrides.items()
-                if grid is not None
-            }
 
         self._progress_index = 0
         self._eval_index = 0
@@ -230,6 +217,121 @@ class Engine:
         self._cached_jacobian: Array | None = None
         self._pending_initial_log = False
         self._log_progress = True
+        self._log_configuration_summary(
+            options=options,
+            runner_command=runner_command,
+            runner_env=runner_env,
+        )
+
+    def _log_configuration_summary(
+        self,
+        *,
+        options: EngineOptions,
+        runner_command: tuple[str, ...],
+        runner_env: Dict[str, str] | None,
+    ) -> None:
+        """Emit a concise configuration summary to the log."""
+        optimizer_opts = options.optimizer
+        jacobian_opts = options.jacobian
+        cleanup_opts = options.cleanup
+        storage_opts = options.storage
+        monitor_opts = options.monitor
+        runner_opts = options.runner
+
+        params = self.parameter_space.parameters()
+        param_lines: List[str] = []
+        if params:
+            for param in params:
+                lo, hi = param.bounds if param.bounds is not None else (None, None)
+                param_lines.append(
+                    f"• {param.name}: θ₀={param.theta0:.6g}, vary={param.vary}, bounds=({lo},{hi})"
+                )
+        else:
+            param_lines.append("• (no parameters)")
+
+        case_lines: List[str] = []
+        for state in self._cases:
+            case_obj = state.case
+            template_path = Path(case_obj.template.template_path)
+            case_lines.append(
+                f"• {state.name}  [subfolder='{case_obj.subfolder or '.'}', threads={case_obj.omp_threads or 'default'}]"
+            )
+            case_lines.append(f"    template: {template_path}")
+            if state.experiments:
+                case_lines.append("    experiments:")
+                for exp_name in state.experiments.keys():
+                    adapter = case_obj.adapters.get(exp_name)
+                    adapter_name = None
+                    if adapter is not None:
+                        reader = adapter.reader
+                        adapter_name = getattr(reader, "__qualname__", None) or getattr(
+                            reader, "__name__", str(reader)
+                        )
+                    grid_opts = state.grid_policies.get(exp_name, GridPolicyOptions())
+                    grid_desc = grid_opts.policy
+                    if grid_opts.values is not None:
+                        grid_desc += f" ({len(list(grid_opts.values))} pts)"
+                    case_lines.append(
+                        f"      ▸ {exp_name} → adapter={adapter_name or 'unknown'}, grid={grid_desc}"
+                    )
+            else:
+                case_lines.append("    experiments: (none)")
+
+        def _section(title: str, rows: List[str]) -> List[str]:
+            lines = [f"│ {title}"]
+            if rows:
+                lines.extend(f"│   {row}" for row in rows)
+            else:
+                lines.append("│   • (none)")
+            lines.append("│")
+            return lines
+
+        lines: List[str] = [
+            "┌────────────── ENGINE CONFIGURATION ────────────────",
+        ]
+        lines += _section(
+            "Optimizer",
+            [
+                f"• name: {optimizer_opts.name}",
+                f"• adapter: {type(self.optimizer_adapter).__name__}",
+                f"• reparametrize: {optimizer_opts.reparametrize}",
+                f"• settings: {optimizer_opts.settings or {}}",
+            ],
+        )
+        lines += _section(
+            "Jacobian",
+            [
+                f"• enabled: {jacobian_opts.enabled}",
+                f"• perturbation: {float(jacobian_opts.perturbation)}",
+                f"• parallel: {bool(jacobian_opts.parallel)}",
+            ],
+        )
+        storage_rows = [
+            f"• mode: {self.storage_mode}",
+            f"• root: {storage_opts.root}",
+            f"• workdir: {self.workdir}",
+            f"• persist_root: {self.persist_root}",
+            f"• cleanup_mode: {self.cleanup_mode}",
+            f"• remove_previous: {self.cleanup_previous}",
+        ]
+        lines += _section("Storage", storage_rows)
+        runner_rows = [
+            f"• jobs: {runner_opts.jobs}",
+            f"• command: {' '.join(runner_command)}",
+            f"• env keys: {sorted((runner_env or {}).keys())}",
+        ]
+        lines += _section("Runner", runner_rows)
+        monitor_rows = [
+            f"• enabled: {monitor_opts.enabled}",
+            f"• socket: {monitor_opts.socket}",
+            f"• label: {monitor_opts.label}",
+        ]
+        lines += _section("Monitor", monitor_rows)
+        lines += _section("Parameters", param_lines)
+        lines += _section("Cases", case_lines)
+        lines[-1] = "└─────────────────────────────────────────────────────"
+        summary = "\n" + "\n".join(lines)
+        self._logger.info(summary)
 
     # ------------------------------------------------------------------ public API
     def run(
@@ -817,7 +919,6 @@ class Engine:
             residual = self._finalize_case_jobs(
                 jobs,
                 track_series=False,
-                grid_overrides=self._case_grid_cache,
             )
             J[:, idx] = (residual - base_residual) / perturb
         return J
@@ -849,8 +950,6 @@ class Engine:
         residual = self._finalize_case_jobs(
             base_jobs,
             track_series=True,
-            grid_overrides=self._case_grid_cache,
-            update_grid_cache=True,
         )
         self._last_phi = phi_vec.copy()
         self._last_theta_vec = theta_vec
@@ -902,8 +1001,6 @@ class Engine:
         jobs: List[tuple[_CaseState, Path, RunHandle, str]],
         *,
         track_series: bool,
-        grid_overrides: Dict[str, Dict[str, Array]] | None = None,
-        update_grid_cache: bool = False,
     ) -> Array:
         """Wait for running simulations and assemble residuals."""
         residuals: List[Array] = []
@@ -923,13 +1020,11 @@ class Engine:
                     f"FEBio exited with code {result.exit_code} for case '{case_name}'"
                 )
             simulations = state.case.collect(feb_path)
-            overrides = None
-            if grid_overrides is not None:
-                overrides = grid_overrides.get(case_name)
+            overrides = self._build_target_grids(state, simulations)
             residual, _, details = self.residual_assembler.assemble_with_details(
                 state.experiments,
                 simulations,
-                target_grids=overrides,
+                target_grids=overrides or None,
             )
             if residual.size:
                 residuals.append(cast(Array, residual))
@@ -965,11 +1060,6 @@ class Engine:
                             "y_exp": _to_list(y_exp_vals),
                             "y_sim": _to_list(y_sim_vals),
                         }
-                    if update_grid_cache and grid_vals is not None:
-                        cache = self._case_grid_cache.setdefault(case_name, {})
-                        cache[exp_name] = cast(
-                            Array, np.asarray(grid_vals, dtype=float).reshape(-1)
-                        )
                 except Exception:
                     pass
 
@@ -995,6 +1085,76 @@ class Engine:
             return cast(Array, np.array([], dtype=float))
         return cast(Array, np.concatenate(residuals))
 
+    def _build_target_grids(
+        self,
+        state: _CaseState,
+        simulations: Mapping[str, tuple[np.ndarray, np.ndarray]],
+    ) -> Dict[str, Array]:
+        grids: Dict[str, Array] = {}
+        for exp_name, policy in state.grid_policies.items():
+            exp_entry = state.experiments.get(exp_name)
+            sim_entry = simulations.get(exp_name)
+            if exp_entry is None or sim_entry is None:
+                continue
+            adapter = state.case.adapters.get(exp_name)
+            adapter_name = None
+            if adapter is not None:
+                reader = adapter.reader
+                adapter_name = getattr(reader, "__qualname__", None) or getattr(
+                    reader, "__name__", str(reader)
+                )
+            grids[exp_name] = self._resolve_grid(
+                policy,
+                exp_entry[0],
+                sim_entry[0],
+                f"{state.name}/{exp_name}",
+                adapter_name or "adapter",
+            )
+        return grids
+
+    def _resolve_grid(
+        self,
+        policy: GridPolicyOptions,
+        x_exp: Array,
+        x_sim: Array,
+        exp_label: str,
+        adapter_label: str,
+    ) -> Array:
+        if policy.policy == "exp_to_sim":
+            return cast(Array, np.asarray(x_exp, dtype=float))
+        if policy.policy == "fixed_user":
+            if policy.values is None:
+                raise ValueError("fixed_user grid policy requires explicit values.")
+            grid = cast(Array, np.asarray(list(policy.values), dtype=float).reshape(-1))
+            self._check_grid_bounds(exp_label, adapter_label, "experiment", grid, x_exp)
+            self._check_grid_bounds(exp_label, adapter_label, "simulation", grid, x_sim)
+            return grid
+        raise ValueError(f"Unsupported grid policy: {policy.policy}")
+
+    def _check_grid_bounds(
+        self,
+        exp_label: str,
+        adapter_label: str,
+        source_label: str,
+        grid: Array,
+        samples: Array,
+        tol: float = 1e-6,
+    ) -> None:
+        """Emit a warning when samples extend beyond the configured grid."""
+        if grid.size == 0 or samples.size == 0:
+            return
+        g_min = float(np.min(grid))
+        g_max = float(np.max(grid))
+        s_min = float(np.min(samples))
+        s_max = float(np.max(samples))
+        if g_min < s_min - tol or g_max > s_max + tol:
+            message = (
+                f"\n[{exp_label} | {adapter_label}] fixed_user grid span "
+                f"[{g_min:.6f}, {g_max:.6f}] extends beyond {source_label} x-range "
+                f"[{s_min:.6f}, {s_max:.6f}]; values will be extrapolated"
+            )
+            self._logger.warning(message)
+
     def _execute_cases(
         self,
         theta: Mapping[str, float],
@@ -1006,8 +1166,6 @@ class Engine:
         return self._finalize_case_jobs(
             jobs,
             track_series=True,
-            grid_overrides=self._case_grid_cache,
-            update_grid_cache=True,
         )
 
     def _cleanup_previous_iterations(self) -> None:

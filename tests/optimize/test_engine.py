@@ -5,7 +5,6 @@ from interFEBio.Optimize.engine import Engine
 from interFEBio.Optimize.experiments import ExperimentSeries
 from interFEBio.Optimize.options import (
     EngineOptions,
-    GridPolicyOptions,
     MonitorOptions,
     OptimizerOptions,
     RunnerOptions,
@@ -27,7 +26,6 @@ def test_engine_runs_with_mocked_residual(tmp_path):
             raise NotImplementedError
 
     options = EngineOptions(
-        grid=GridPolicyOptions(policy="sim_to_exp"),
         runner=RunnerOptions(jobs=1),
         storage=StorageOptions(mode="disk", root=tmp_path),
         monitor=MonitorOptions(enabled=False),
@@ -67,7 +65,6 @@ def test_engine_runs_without_reparametrization(tmp_path):
             raise NotImplementedError
 
     options = EngineOptions(
-        grid=GridPolicyOptions(policy="sim_to_exp"),
         runner=RunnerOptions(jobs=1),
         storage=StorageOptions(mode="disk", root=tmp_path),
         monitor=MonitorOptions(enabled=False),

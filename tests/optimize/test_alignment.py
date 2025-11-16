@@ -43,28 +43,7 @@ def test_residual_assembler():
     assert "exp1" in slices
 
 
-def test_sim_to_exp_grid_clips_to_sim_domain():
-    grid = EvaluationGrid(policy="sim_to_exp")
-    assembler = ResidualAssembler(grid)
-    experiments = {
-        "exp": (
-            np.array([0.0, 0.5, 1.0, 1.5]),
-            np.array([0.0, 0.5, 1.0, 1.5]),
-            None,
-        )
-    }
-    simulations = {
-        "exp": (
-            np.array([0.0, 0.5, 1.0]),
-            np.array([0.0, 1.0, 2.0]),
-        )
-    }
-    residuals, _, details = assembler.assemble_with_details(experiments, simulations)
-    np.testing.assert_allclose(details["exp"]["grid"], np.array([0.0, 0.5, 1.0]))
-    assert residuals.shape[0] == 3
-
-
-def test_exp_to_sim_grid_clips_to_exp_domain():
+def test_exp_to_sim_preserves_experimental_grid():
     grid = EvaluationGrid(policy="exp_to_sim")
     assembler = ResidualAssembler(grid)
     experiments = {
@@ -85,8 +64,29 @@ def test_exp_to_sim_grid_clips_to_exp_domain():
     assert residuals.shape[0] == 3
 
 
+def test_exp_to_sim_extends_when_sim_grid_longer():
+    grid = EvaluationGrid(policy="exp_to_sim")
+    assembler = ResidualAssembler(grid)
+    experiments = {
+        "exp": (
+            np.array([0.0, 0.5, 1.0, 1.5]),
+            np.array([0.0, 0.5, 1.0, 1.5]),
+            None,
+        )
+    }
+    simulations = {
+        "exp": (
+            np.array([0.0, 0.75, 1.5]),
+            np.array([0.0, 1.0, 2.0]),
+        )
+    }
+    residuals, _, details = assembler.assemble_with_details(experiments, simulations)
+    np.testing.assert_allclose(details["exp"]["grid"], np.array([0.0, 0.5, 1.0, 1.5]))
+    assert residuals.shape[0] == 4
+
+
 def test_residual_assembler_target_override():
-    grid = EvaluationGrid(policy="sim_to_exp")
+    grid = EvaluationGrid(policy="exp_to_sim")
     assembler = ResidualAssembler(grid)
     experiments = {
         "exp": (
@@ -112,7 +112,7 @@ def test_residual_assembler_target_override():
 
 
 def test_residual_assembler_override_skips_clipping():
-    grid = EvaluationGrid(policy="sim_to_exp")
+    grid = EvaluationGrid(policy="exp_to_sim")
     assembler = ResidualAssembler(grid)
     experiments = {
         "exp": (

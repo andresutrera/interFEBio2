@@ -19,15 +19,14 @@ class GridPolicyOptions:
 
     Attributes:
         policy (GridPolicy): Strategy for choosing the evaluation grid. Using
-            ``"exp_to_sim"`` maps simulations onto experimental abscissa
-            samples, ``"sim_to_exp"`` does the inverse, and ``"fixed_user"``
-            forces both to use ``values``.
+            ``"exp_to_sim"`` preserves the experimental sampling and projects
+            simulations (with extrapolation when required) to that grid, while
+            ``"fixed_user"`` forces both sources onto ``values``.
         values (Sequence[float] | None): Explicit grid used when ``policy`` is
-            ``"fixed_user"``. Supplying a denser grid can improve alignment
-            fidelity at the cost of more interpolation.
+            ``"fixed_user"``, allowing the user to enforce a shared abscissa.
     """
 
-    policy: GridPolicy = "sim_to_exp"
+    policy: GridPolicy = "exp_to_sim"
     values: Sequence[float] | None = None
 
 
@@ -156,8 +155,6 @@ class EngineOptions:
     """Aggregate container for optimisation engine configuration.
 
     Attributes:
-        grid (GridPolicyOptions): Controls how experimental and simulated data
-            align on a shared grid.
         jacobian (JacobianOptions): Determines whether and how finite-difference
             Jacobians are evaluated.
         cleanup (CleanupOptions): Governs interim and final cleanup of working
@@ -171,7 +168,6 @@ class EngineOptions:
             responsible for driving parameter updates.
     """
 
-    grid: GridPolicyOptions = field(default_factory=GridPolicyOptions)
     jacobian: JacobianOptions = field(default_factory=JacobianOptions)
     cleanup: CleanupOptions = field(default_factory=CleanupOptions)
     runner: RunnerOptions = field(default_factory=RunnerOptions)

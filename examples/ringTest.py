@@ -92,8 +92,7 @@ def _load_experiment(
     else:
         grid = np.linspace(x[0], x[-1], GRID_POINTS)
     y_interp = np.interp(grid, x, y)
-    grid_attr = grid if grid_override is not None else None
-    return ExperimentSeries(x=grid, y=y_interp, grid=grid_attr)
+    return ExperimentSeries(x=grid, y=y_interp)
 
 
 def build_parameter_space() -> ParameterSpace:
@@ -163,6 +162,11 @@ def build_ring_case(series: ExperimentSeries) -> SimulationCase:
         experiments={"ring": series},
         adapters={"ring": SimulationAdapter(read_ring_results)},
         omp_threads=8,
+        grids={
+            "ring": GridPolicyOptions(
+                policy="fixed_user", values=RING_FIXED_GRID.tolist()
+            )
+        },
     )
 
 
@@ -174,6 +178,11 @@ def build_long_case(series: ExperimentSeries) -> SimulationCase:
         experiments={"long": series},
         adapters={"long": SimulationAdapter(read_longitudinal_results)},
         omp_threads=1,
+        grids={
+            "long": GridPolicyOptions(
+                policy="fixed_user", values=LONG_FIXED_GRID.tolist()
+            )
+        },
     )
 
 
@@ -186,7 +195,6 @@ def main() -> None:
         build_ring_case(ring_series),
     ]  # build_ring_case(ring_series),
     options = EngineOptions(
-        grid=GridPolicyOptions(policy="exp_to_sim"),
         jacobian=JacobianOptions(enabled=True, perturbation=1e-4, parallel=True),
         cleanup=CleanupOptions(remove_previous=False, mode="none"),
         runner=RunnerOptions(jobs=6, command=FEBIO_COMMAND),

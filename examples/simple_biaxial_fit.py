@@ -18,6 +18,7 @@ from interFEBio.Optimize.options import (
     OptimizerOptions,
     RunnerOptions,
     StorageOptions,
+    GridPolicyOptions,
 )
 from interFEBio.Optimize.Parameters import ParameterSpace
 from interFEBio.XPLT import xplt
@@ -30,6 +31,8 @@ WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 FEBIO_COMMAND = ("febio4", "-i")
 PARALLEL_JOBS = 2
+
+FIXED_GRID = np.linspace(0.0, 2.0, 51)
 
 
 def read_sigma_xx(xplt_path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -59,6 +62,9 @@ def build_case(exp_series: ExperimentSeries, name: str) -> SimulationCase:
         experiments={name: exp_series},
         adapters={name: SimulationAdapter(read_sigma_xx)},
         omp_threads=1,
+        grids={
+            name: GridPolicyOptions(policy="fixed_user", values=FIXED_GRID.tolist())
+        },
     )
 
 
