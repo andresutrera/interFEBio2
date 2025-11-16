@@ -447,6 +447,7 @@ HOME_BODY = textwrap.dedent(
         function chartColors() {
           return {
             bg: getCssColor('--chart-bg', '#10172a'),
+            card: getCssColor('--card-bg', '#232c42'),
             text: getCssColor('--chart-axis', '#f5f5f5'),
             grid: getCssColor('--chart-grid', 'rgba(255,255,255,0.08)'),
             zero: getCssColor('--chart-zero', 'rgba(255,255,255,0.18)'),
@@ -669,6 +670,7 @@ HOME_BODY = textwrap.dedent(
             return;
           }
           const colors = chartColors();
+          const cardBg = colors.card || colors.bg;
           let total = 0;
           let free = 0;
           disks.forEach((disk, idx) => {
@@ -696,29 +698,42 @@ HOME_BODY = textwrap.dedent(
             const usedValue = used < 0 ? 0 : used;
             const freeValue = available < 0 ? 0 : available;
             const values = usedValue + freeValue > 0 ? [usedValue, freeValue] : [1, 0];
-                Plotly.react(
-                  chart,
-                  [
-                    {
-                      values,
-                      labels: ['Used', 'Free'],
-                      type: 'pie',
-                      hole: 0.65,
-                      marker: { colors: [colors.diskUsed, colors.diskFree] },
-                      textinfo: 'label+percent',
-                      hovertemplate: '%{label}: %{value:.2f} B<extra></extra>',
-                    },
-                  ],
+            const annotationText = `${percentLabel}%<br>used`;
+            Plotly.react(
+              chart,
+              [
+                {
+                  values,
+                  labels: ['Used', 'Free'],
+                  type: 'pie',
+                  hole: 0.65,
+                  marker: { colors: [colors.diskUsed, colors.diskFree] },
+                  textinfo: 'none',
+                  hovertemplate: '%{label}: %{value:.2f} B (%{percent})<extra></extra>',
+                },
+              ],
+              {
+                paper_bgcolor: cardBg,
+                plot_bgcolor: cardBg,
+                height: 160,
+                width: 160,
+                margin: { l: 6, r: 6, t: 6, b: 6 },
+                showlegend: false,
+                annotations: [
                   {
-                    paper_bgcolor: colors.bg,
-                    plot_bgcolor: colors.bg,
-                    height: 160,
-                    width: 160,
-                    margin: { l: 0, r: 0, t: 0, b: 0 },
-                    showlegend: false,
+                    text: annotationText,
+                    x: 0.5,
+                    y: 0.5,
+                    font: { color: colors.text, size: 13 },
+                    showarrow: false,
+                    xref: 'paper',
+                    yref: 'paper',
+                    align: 'center',
                   },
-                  plotlyConfig,
-                );
+                ],
+              },
+              plotlyConfig,
+            );
           });
           if (diskSummaryEl) {
             diskSummaryEl.textContent = `${formatBytes(free)} free / ${formatBytes(total)}`;

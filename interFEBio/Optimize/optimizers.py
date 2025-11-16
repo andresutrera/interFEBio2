@@ -152,7 +152,7 @@ class ScipyMinimizeAdapter(OptimizerAdapter):
             lower = np.asarray(bounds[0], dtype=float)
             upper = np.asarray(bounds[1], dtype=float)
             min_bounds: Sequence[tuple[float, float]] | None = list(
-                zip(lower.tolist(), upper.tolist())
+                zip(lower.tolist(), upper.tolist(), strict=True)
             )
         else:
             min_bounds = cast(Sequence[tuple[float, float]] | None, bounds)
