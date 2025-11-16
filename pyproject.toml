@@ -42,7 +42,8 @@ dev = [
 monitor = [
   "fastapi>=0.111.0",
   "uvicorn>=0.30.0",
-  "watchdog>=4.0.0"
+  "watchdog>=4.0.0",
+  "psutil>=5.9"
 ]
 
 [project.scripts]

@@ -33,6 +33,7 @@ def ensure_dependencies() -> None:
     try:
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
+        import psutil  # noqa: F401
     except ImportError as exc:  # pragma: no cover - optional dependency check
         raise RuntimeError(
             "interfebio-monitor requires the 'monitor' extra. Install with "

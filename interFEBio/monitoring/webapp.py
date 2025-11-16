@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import shutil
 import textwrap
+import time
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -18,12 +21,148 @@ except ImportError as exc:  # pragma: no cover - optional dependency
         "`pip install interFEBio[monitor]`."
     ) from exc
 
+try:  # pragma: no cover - optional dependency at runtime
+    import psutil  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover
+    psutil = None
+
 from .events import EventSocketListener
 from .paths import default_registry_path, default_socket_path
 from .registry import ActiveRunDeletionError, RunRegistry
 from .state import StorageInventory
 
 logger = logging.getLogger(__name__)
+
+if psutil is not None:  # pragma: no cover - best effort initialisation
+    try:
+        psutil.cpu_percent(interval=None)
+    except Exception:  # pragma: no cover - ignore sensor issues
+        pass
+
+
+def _safe_cpu_percent() -> float | None:
+    if psutil is not None:
+        try:
+            return float(psutil.cpu_percent(interval=None))
+        except Exception:  # pragma: no cover
+            return None
+    try:
+        load1, _, _ = os.getloadavg()
+        cores = os.cpu_count() or 1
+        return max(0.0, min(100.0, (load1 / cores) * 100.0))
+    except (AttributeError, OSError):  # pragma: no cover - platform-specific
+        return None
+
+
+def _fallback_memory_stats() -> dict[str, float] | None:
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        phys_pages = os.sysconf("SC_PHYS_PAGES")
+        avail_pages = os.sysconf("SC_AVPHYS_PAGES")
+    except (AttributeError, ValueError, OSError):  # pragma: no cover
+        return None
+    total = float(page_size) * float(phys_pages)
+    available = float(page_size) * float(avail_pages)
+    used = max(total - available, 0.0)
+    percent = (used / total * 100.0) if total else 0.0
+    return {
+        "total": total,
+        "available": available,
+        "used": used,
+        "percent": percent,
+    }
+
+
+def _safe_memory_stats() -> dict[str, float] | None:
+    if psutil is not None:
+        try:
+            stats = psutil.virtual_memory()
+            return {
+                "total": float(stats.total),
+                "available": float(stats.available),
+                "used": float(stats.used),
+                "percent": float(stats.percent),
+            }
+        except Exception:  # pragma: no cover
+            return None
+    return _fallback_memory_stats()
+
+
+def _safe_disk_stats() -> list[dict[str, Any]]:
+    disks: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    if psutil is not None:
+        try:
+            partitions = psutil.disk_partitions(all=False)
+        except Exception:  # pragma: no cover
+            partitions = []
+        for part in partitions:
+            mount = part.mountpoint or part.device or ""
+            if not mount or mount in seen:
+                continue
+            if mount.startswith("/snap/") or mount == "/snap":
+                continue
+            device_name = part.device or ""
+            if device_name.startswith("/dev/loop"):
+                continue
+            try:
+                usage = psutil.disk_usage(part.mountpoint)
+            except (PermissionError, FileNotFoundError, OSError):
+                continue
+            if usage.total <= 0:
+                continue
+            seen.add(mount)
+            disks.append(
+                {
+                    "mount": part.mountpoint,
+                    "device": part.device,
+                    "fstype": part.fstype,
+                    "total": float(usage.total),
+                    "used": float(usage.used),
+                    "free": float(usage.free),
+                    "percent": float(usage.percent),
+                }
+            )
+    if not disks:
+        try:
+            usage = shutil.disk_usage(Path("/") if os.name != "nt" else Path("C:/"))
+        except (PermissionError, FileNotFoundError, OSError):
+            usage = None
+        if usage:
+            disks.append(
+                {
+                    "mount": "/" if os.name != "nt" else "C:/",
+                    "device": None,
+                    "fstype": None,
+                    "total": float(usage.total),
+                    "used": float(usage.used),
+                    "free": float(usage.free),
+                    "percent": float(usage.used) / float(usage.total) * 100.0
+                    if usage.total
+                    else 0.0,
+                }
+            )
+    disks.sort(key=lambda item: item.get("total", 0.0), reverse=True)
+    return disks[:4]
+
+
+def _collect_system_metrics() -> dict[str, Any]:
+    memory = _safe_memory_stats() or {}
+    disks = _safe_disk_stats()
+    try:
+        load_avg = os.getloadavg()
+    except (AttributeError, OSError):
+        load_avg = None
+    snapshot = {
+        "timestamp": time.time(),
+        "cpu_percent": _safe_cpu_percent(),
+        "cpu_count": os.cpu_count(),
+        "memory": memory,
+        "disks": disks,
+    }
+    if load_avg is not None:
+        snapshot["load_avg"] = list(load_avg)
+    return snapshot
 
 
 HOME_HEAD = textwrap.dedent(
@@ -52,6 +191,10 @@ HOME_HEAD = textwrap.dedent(
           --param-value: #9bd4ff;
           --ghost-button-bg: rgba(255, 255, 255, 0.08);
           --ghost-button-border: rgba(255, 255, 255, 0.2);
+          --cpu-line: #9b8bff;
+          --mem-line: #34d399;
+          --disk-used: #fb7185;
+          --disk-free: #2dd4bf;
         }
         body.light {
           color-scheme: light;
@@ -73,6 +216,10 @@ HOME_HEAD = textwrap.dedent(
           --param-value: #1b4f91;
           --ghost-button-bg: rgba(38, 84, 164, 0.1);
           --ghost-button-border: rgba(38, 84, 164, 0.35);
+          --cpu-line: #5b21b6;
+          --mem-line: #0f766e;
+          --disk-used: #f97316;
+          --disk-free: #059669;
         }
         * { box-sizing: border-box; }
         body { font-family: "Inter", Arial, sans-serif; margin: 1.5rem; background: var(--bg-color); color: var(--text-color); transition: background 0.2s ease, color 0.2s ease; }
@@ -101,6 +248,16 @@ HOME_HEAD = textwrap.dedent(
         .chart-wrapper { background: var(--card-bg); border-radius: 10px; padding: 0.75rem 1rem; }
         .chart-wrapper h3 { margin: 0 0 0.5rem 0; font-size: 0.95rem; letter-spacing: 0.03rem; text-transform: uppercase; opacity: 0.75; }
         .chart { width: 100%; height: 420px; display: block; border-radius: 6px; background: var(--chart-bg); }
+        .chart-sm { height: 300px; }
+        .panel.full-width { flex: 1 1 100%; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+        .disk-pies { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.6rem; }
+        .disk-pie { background: var(--card-bg); border-radius: 10px; padding: 0.65rem 0.8rem; flex: 1 1 200px; min-width: 160px; display: flex; flex-direction: column; align-items: center; }
+        .disk-pie h4 { margin: 0 0 0.35rem 0; font-size: 0.85rem; letter-spacing: 0.04rem; text-transform: uppercase; opacity: 0.75; }
+        .disk-pie p { margin: 0.2rem 0 0 0; font-size: 0.78rem; color: var(--muted-text); }
+        .disk-chart { height: 160px; width: 160px; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: visible; }
+        .stat-pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.78rem; background: rgba(255,255,255,0.08); color: var(--muted-text); }
+        body.light .stat-pill { background: rgba(31,36,48,0.08); }
         pre { background: var(--json-bg); padding: 1rem; border-radius: 10px; overflow-x: auto; margin: 0; font-size: 0.85rem; }
         .param-grid { display: flex; flex-direction: column; gap: 0.2rem; font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; font-size: 0.85rem; }
         .param-row { display: flex; justify-content: space-between; gap: 0.5rem; }
@@ -180,6 +337,27 @@ HOME_BODY = textwrap.dedent(
           </div>
           <pre id="detailJson" style="max-height:0; overflow:hidden; transition:max-height 0.18s ease; visibility:hidden;">{}</pre>
         </section>
+        <section class="panel full-width" id="systemPanel">
+          <h2>Server Health</h2>
+          <div class="stats-grid">
+            <div class="chart-wrapper">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                <h3 style="margin:0;">CPU &amp; Memory</h3>
+                <span class="stat-pill" id="systemSummary">--</span>
+              </div>
+              <div id="systemChart" class="chart chart-sm"></div>
+            </div>
+            <div class="chart-wrapper">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                <h3 style="margin:0;">Disk Utilisation</h3>
+                <span class="stat-pill" id="diskSummary">--</span>
+              </div>
+              <div class="disk-pies" id="diskPies">
+                <p style="margin:0; color:var(--muted-text);">Collecting disk information...</p>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
       <script>
         const rows = document.getElementById('runRows');
@@ -192,11 +370,18 @@ HOME_BODY = textwrap.dedent(
         const toggleJsonBtn = document.getElementById('toggleJson');
         const seriesSelect = document.getElementById('seriesSelect');
         const seriesChartEl = document.getElementById('seriesChart');
+        const systemChartEl = document.getElementById('systemChart');
+        const diskPiesEl = document.getElementById('diskPies');
+        const systemSummaryEl = document.getElementById('systemSummary');
+        const diskSummaryEl = document.getElementById('diskSummary');
         let jsonExpanded = false;
         let selectedRunId = null;
         let lastTableHtml = '';
         let currentSeriesData = {};
         let currentDetailData = null;
+        let latestSystemSnapshot = null;
+        const systemHistory = [];
+        const maxSystemPoints = 90;
         const themeStorageKey = 'interfebio-monitor-theme';
         const plotlyConfig = { displayModeBar: false, responsive: true };
         const themeToggleBtn = document.getElementById('themeToggle');
@@ -220,6 +405,20 @@ HOME_BODY = textwrap.dedent(
             return '-';
           }
           return escapeHtml(String(value));
+        }
+        function formatBytes(value) {
+          if (typeof value !== 'number' || !Number.isFinite(value)) {
+            return '-';
+          }
+          const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+          let idx = 0;
+          let num = value;
+          while (num >= 1024 && idx < units.length - 1) {
+            num /= 1024;
+            idx += 1;
+          }
+          const precision = num >= 100 || idx === 0 ? 0 : 1;
+          return `${num.toFixed(precision)} ${units[idx]}`;
         }
         function latestThetaSnapshot(data) {
           const iterations = Array.isArray(data?.iterations) ? data.iterations : [];
@@ -252,6 +451,10 @@ HOME_BODY = textwrap.dedent(
             grid: getCssColor('--chart-grid', 'rgba(255,255,255,0.08)'),
             zero: getCssColor('--chart-zero', 'rgba(255,255,255,0.18)'),
             muted: getCssColor('--muted-text', 'rgba(255,255,255,0.5)'),
+            cpu: getCssColor('--cpu-line', '#8b5cf6'),
+            memory: getCssColor('--mem-line', '#34d399'),
+            diskUsed: getCssColor('--disk-used', '#fb7185'),
+            diskFree: getCssColor('--disk-free', '#2dd4bf'),
           };
         }
         function updateThemeButton() {
@@ -268,6 +471,8 @@ HOME_BODY = textwrap.dedent(
             renderEmptyPlot(costChartEl, 'Select a run');
             renderEmptyPlot(seriesChartEl, 'Select a run');
           }
+          renderSystemUsage();
+          renderDiskPies();
         }
         function applyTheme(theme, { skipStorage = false } = {}) {
           const isLight = theme === 'light';
@@ -300,7 +505,7 @@ HOME_BODY = textwrap.dedent(
         function hasPlotly() {
           return typeof Plotly !== 'undefined' && Plotly.react;
         }
-        function renderEmptyPlot(container, message) {
+        function renderEmptyPlot(container, message, height = 420) {
           if (!container) {
             return;
           }
@@ -316,7 +521,7 @@ HOME_BODY = textwrap.dedent(
               paper_bgcolor: colors.bg,
               plot_bgcolor: colors.bg,
               autosize: true,
-              height: 420,
+              height,
               margin: { l: 0, r: 0, t: 0, b: 0 },
               xaxis: { visible: false },
               yaxis: { visible: false },
@@ -336,6 +541,212 @@ HOME_BODY = textwrap.dedent(
           );
           if (typeof Plotly !== 'undefined' && Plotly.Plots && typeof Plotly.Plots.resize === 'function') {
             Plotly.Plots.resize(container);
+          }
+        }
+        function pushSystemHistory(snapshot) {
+          if (!snapshot || typeof snapshot.timestamp !== 'number') {
+            return;
+          }
+          systemHistory.push({
+            time: new Date(snapshot.timestamp * 1000),
+            cpu: typeof snapshot.cpu_percent === 'number' ? snapshot.cpu_percent : null,
+            memory:
+              snapshot && snapshot.memory && typeof snapshot.memory.percent === 'number'
+                ? snapshot.memory.percent
+                : null,
+          });
+          while (systemHistory.length > maxSystemPoints) {
+            systemHistory.shift();
+          }
+        }
+        function updateSystemSummary(snapshot) {
+          if (!systemSummaryEl) {
+            return;
+          }
+          const cpuText = snapshot && typeof snapshot.cpu_percent === 'number'
+            ? `${snapshot.cpu_percent.toFixed(1)}% CPU`
+            : 'CPU N/A';
+          const memPercent = snapshot && snapshot.memory && typeof snapshot.memory.percent === 'number'
+            ? `${snapshot.memory.percent.toFixed(1)}% RAM`
+            : 'RAM N/A';
+          systemSummaryEl.textContent = `${cpuText} • ${memPercent}`;
+        }
+        function renderSystemUsage() {
+          if (!systemChartEl) {
+            return;
+          }
+          if (!systemHistory.length) {
+            renderEmptyPlot(systemChartEl, 'Collecting metrics...', 300);
+            return;
+          }
+          if (!hasPlotly()) {
+            renderEmptyPlot(systemChartEl, 'Plotly.js not available', 300);
+            return;
+          }
+          const scrollElement = document.scrollingElement || document.documentElement || document.body;
+          let prevScrollTop = 0;
+          if (scrollElement) {
+            prevScrollTop = scrollElement.scrollTop;
+          } else if (typeof window !== 'undefined') {
+            prevScrollTop = window.scrollY || window.pageYOffset || 0;
+          }
+          const colors = chartColors();
+          const times = systemHistory.map((entry) => entry.time);
+          const cpuValues = systemHistory.map((entry) => (typeof entry.cpu === 'number' ? entry.cpu : null));
+          const memValues = systemHistory.map((entry) =>
+            typeof entry.memory === 'number' ? entry.memory : null,
+          );
+          const cpuTrace = {
+            x: times,
+            y: cpuValues,
+            name: 'CPU %',
+            mode: 'lines',
+            line: { color: colors.cpu, width: 3 },
+            hovertemplate: 'CPU %{y:.1f}%<extra></extra>',
+          };
+          const memTrace = {
+            x: times,
+            y: memValues,
+            name: 'RAM %',
+            mode: 'lines',
+            line: { color: colors.memory, width: 3 },
+            hovertemplate: 'RAM %{y:.1f}%<extra></extra>',
+          };
+          const layout = {
+            paper_bgcolor: colors.bg,
+            plot_bgcolor: colors.bg,
+            autosize: true,
+            height: 300,
+            margin: { l: 40, r: 8, t: 10, b: 40 },
+            xaxis: {
+              title: 'Time',
+              color: colors.text,
+              gridcolor: colors.grid,
+              showgrid: false,
+            },
+            yaxis: {
+              title: 'Percent',
+              color: colors.text,
+              gridcolor: colors.grid,
+              zerolinecolor: colors.zero,
+              range: [0, 100],
+            },
+            legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, x: 0, font: { color: colors.text } },
+          };
+          Plotly.react(systemChartEl, [cpuTrace, memTrace], layout, plotlyConfig);
+          if (typeof Plotly !== 'undefined' && Plotly.Plots && typeof Plotly.Plots.resize === 'function') {
+            Plotly.Plots.resize(systemChartEl);
+          }
+          if (scrollElement) {
+            scrollElement.scrollTop = prevScrollTop;
+          } else if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+            window.scrollTo(0, prevScrollTop);
+          }
+        }
+        function renderDiskPies() {
+          if (!diskPiesEl) {
+            return;
+          }
+          const disks = latestSystemSnapshot && Array.isArray(latestSystemSnapshot.disks)
+            ? latestSystemSnapshot.disks
+            : [];
+          if (hasPlotly()) {
+            const prevCharts = diskPiesEl.querySelectorAll('.disk-chart');
+            prevCharts.forEach((node) => {
+              try {
+                Plotly.purge(node);
+              } catch (err) {
+                // ignore purge errors
+              }
+            });
+          }
+          diskPiesEl.innerHTML = '';
+          if (!disks.length) {
+            diskPiesEl.innerHTML = '<p style="margin:0; color:var(--muted-text);">No disk data.</p>';
+            if (diskSummaryEl) {
+              diskSummaryEl.textContent = 'No disks';
+            }
+            return;
+          }
+          const colors = chartColors();
+          let total = 0;
+          let free = 0;
+          disks.forEach((disk, idx) => {
+            const used = typeof disk.used === 'number' ? disk.used : 0;
+            const available = typeof disk.free === 'number' ? disk.free : 0;
+            total += typeof disk.total === 'number' ? disk.total : used + available;
+            free += available;
+            const card = document.createElement('div');
+            card.className = 'disk-pie';
+            const heading = document.createElement('h4');
+            heading.textContent = disk.mount || disk.device || `Disk ${idx + 1}`;
+            card.appendChild(heading);
+            const chart = document.createElement('div');
+            chart.className = 'disk-chart';
+            card.appendChild(chart);
+            const percentLabel = typeof disk.percent === 'number' ? disk.percent.toFixed(1) : '0.0';
+            const caption = document.createElement('p');
+            caption.textContent = `${formatBytes(available)} free of ${formatBytes(disk.total)} (${percentLabel}% used)`;
+            card.appendChild(caption);
+            diskPiesEl.appendChild(card);
+            if (!hasPlotly()) {
+              chart.innerHTML = '<div style="display:flex; height:100%; align-items:center; justify-content:center; color:var(--muted-text); font-size:0.9rem;">Plotly.js not available</div>';
+              return;
+            }
+            const usedValue = used < 0 ? 0 : used;
+            const freeValue = available < 0 ? 0 : available;
+            const values = usedValue + freeValue > 0 ? [usedValue, freeValue] : [1, 0];
+                Plotly.react(
+                  chart,
+                  [
+                    {
+                      values,
+                      labels: ['Used', 'Free'],
+                      type: 'pie',
+                      hole: 0.65,
+                      marker: { colors: [colors.diskUsed, colors.diskFree] },
+                      textinfo: 'label+percent',
+                      hovertemplate: '%{label}: %{value:.2f} B<extra></extra>',
+                    },
+                  ],
+                  {
+                    paper_bgcolor: colors.bg,
+                    plot_bgcolor: colors.bg,
+                    height: 160,
+                    width: 160,
+                    margin: { l: 0, r: 0, t: 0, b: 0 },
+                    showlegend: false,
+                  },
+                  plotlyConfig,
+                );
+          });
+          if (diskSummaryEl) {
+            diskSummaryEl.textContent = `${formatBytes(free)} free / ${formatBytes(total)}`;
+          }
+        }
+        async function loadSystemMetrics(initial = false) {
+          if (!systemChartEl && !diskPiesEl) {
+            return;
+          }
+          try {
+            const res = await fetch('/api/system/metrics');
+            if (!res.ok) {
+              if (initial && systemChartEl) {
+                renderEmptyPlot(systemChartEl, 'Unable to load metrics', 300);
+              }
+              return;
+            }
+            const data = await res.json();
+            latestSystemSnapshot = data;
+            pushSystemHistory(data);
+            updateSystemSummary(data);
+            renderSystemUsage();
+            renderDiskPies();
+          } catch (err) {
+            if (initial && systemChartEl) {
+              renderEmptyPlot(systemChartEl, 'Unable to load metrics', 300);
+            }
+            console.error(err);
           }
         }
         if (seriesSelect) {
@@ -865,6 +1276,8 @@ HOME_BODY = textwrap.dedent(
         });
         loadRuns();
         setInterval(() => loadRuns(false), 4000);
+        loadSystemMetrics(true);
+        setInterval(() => loadSystemMetrics(false), 5000);
       </script>
     </body>
     """
@@ -932,6 +1345,11 @@ def create_app(
                 }
             )
         return payload
+
+    @app.get("/api/system/metrics")
+    async def system_metrics():
+        """Return current CPU, memory, and disk utilisation."""
+        return _collect_system_metrics()
 
     @app.get("/api/runs/{run_id}")
     async def run_detail(run_id: str):
