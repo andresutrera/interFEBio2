@@ -56,7 +56,7 @@ def read_ring_results(xplt_path: Path) -> tuple[np.ndarray, np.ndarray]:
         np.asarray(disp_view[:, surf_node, "y"], dtype=float).reshape(len(times)) * 2.0
     )
     force = np.nan_to_num(
-        xp.results["contact force"].region("contactPin").time(":").comp("z") * -4.0
+        xp.results["contact force"].region("contactPin").time(":").comp("y") * -4.0
     )
 
     return disp, force
