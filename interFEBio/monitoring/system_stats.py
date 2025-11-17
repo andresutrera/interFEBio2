@@ -44,7 +44,7 @@ class SystemStatsCollector:
         }
         if load_avg is not None:
             snapshot["load_avg"] = [self._clean_number(value) for value in load_avg]
-        return snapshot
+        return self._sanitize_payload(snapshot)
 
     def collect_processes(
         self,
@@ -282,6 +282,21 @@ class SystemStatsCollector:
         if isfinite(number):
             return number
         return None
+
+    @classmethod
+    def _sanitize_payload(cls, value: Any) -> Any:
+        if isinstance(value, bool) or value is None:
+            return value
+        if isinstance(value, (int,)):
+            return value
+        if isinstance(value, float):
+            cleaned = cls._clean_number(value)
+            return cleaned
+        if isinstance(value, dict):
+            return {key: cls._sanitize_payload(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._sanitize_payload(item) for item in value]
+        return value
 
 
 __all__ = ["SystemStatsCollector"]
