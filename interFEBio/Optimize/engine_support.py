@@ -219,29 +219,31 @@ class RunReporter:
                 if nrmse_val is None or not np.isfinite(nrmse_val)
                 else f"{float(nrmse_val):.6e}"
             )
-            rsq_table = PrettyTable()
-            rsq_table.field_names = ["case/experiment", "R^2"]
+            block_lines = [
+                "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                f"┃ Iteration #{index:03d}",
+                "┣━━━━━━━━ Parameters ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ]
+            block_lines.extend(
+                f"┃   {line}" for line in table.get_string().splitlines()
+            )
+            block_lines.append("┣━━━━━━━━ Results ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            block_lines.append(f"┃   cost  : {cost:.6e}")
+            block_lines.append(f"┃   nrmse : {nrmse_display}")
             if r_squared:
+                block_lines.append("┃   R² map:")
                 for key in sorted(r_squared):
                     value = r_squared[key]
-                    rsq_table.add_row(
-                        [
-                            key,
-                            "nan"
-                            if value is None or not np.isfinite(value)
-                            else f"{float(value):.6f}",
-                        ]
-                    )
+                    if value is None or not np.isfinite(value):
+                        display = "nan"
+                    else:
+                        display = f"{float(value):.6f}"
+                    block_lines.append(f"┃     • {key}: {display}")
             else:
-                rsq_table.add_row(["-", "-"])
-            self.logger.info(
-                "\n[iter {iter:03d}] cost={cost:.6e} nrmse={nrmse}\n{param_table}\n{rsq_table}",
-                iter=index,
-                cost=cost,
-                nrmse=nrmse_display,
-                param_table=table.get_string(),
-                rsq_table=rsq_table.get_string(),
-            )
+                block_lines.append("┃   R² map: (no data)")
+            block_lines.append("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            block = "\n".join(block_lines)
+            self.logger.info(f"\n{block}")
 
         client = self.ensure_monitor()
         if client is not None:

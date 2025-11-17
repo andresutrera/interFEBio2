@@ -61,16 +61,17 @@ class SystemStatsCollector:
             return []
         entries: list[dict[str, Any]] = []
         try:
-            iterator = psutil.process_iter(
-                [
-                    "pid",
-                    "name",
-                    "cmdline",
-                    "cwd",
-                    "create_time",
-                    "status",
-                ]
-            )
+            attrs = [
+                "pid",
+                "name",
+                "cmdline",
+                "cwd",
+                "create_time",
+                "status",
+            ]
+            if root_path is not None:
+                attrs.append("environ")
+            iterator = psutil.process_iter(attrs)
         except Exception:
             return []
         for proc in iterator:
@@ -78,8 +79,10 @@ class SystemStatsCollector:
             try:
                 if root_path and not self._process_matches_root(info, root_path):
                     continue
-                entries.append(self._summarize_process(info))
-            except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
+                entries.append(
+                    self._summarize_process(info, fetch_env=root_path is not None)
+                )
+            except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError, psutil.ZombieProcess):
                 continue
             except Exception:
                 continue
@@ -124,7 +127,7 @@ class SystemStatsCollector:
             return False
 
     @staticmethod
-    def _summarize_process(info: dict[str, Any]) -> dict[str, Any]:
+    def _summarize_process(info: dict[str, Any], *, fetch_env: bool) -> dict[str, Any]:
         cmdline = [str(arg) for arg in info.get("cmdline") or []]
         started_at = info.get("create_time")
         try:
@@ -143,7 +146,22 @@ class SystemStatsCollector:
             "cmdline": cmdline,
             "cwd": info.get("cwd"),
             "started_at": started,
+            "omp_threads": SystemStatsCollector._read_omp_env(info) if fetch_env else None,
         }
+
+    @staticmethod
+    def _read_omp_env(info: dict[str, Any]) -> int | None:
+        environ = info.get("environ")
+        if isinstance(environ, dict):
+            value = environ.get("OMP_NUM_THREADS")
+            if value is not None:
+                try:
+                    threads = int(value)
+                    if threads > 0:
+                        return threads
+                except (TypeError, ValueError):
+                    return None
+        return None
 
     @staticmethod
     def _safe_cpu_percent() -> float | None:

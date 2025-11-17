@@ -134,18 +134,20 @@ class MonitorPageTemplate:
         .status-reason { display: block; font-size: 0.8rem; color: #ff9b9b; margin-top: 0.15rem; line-height: 1.3; }
         .terminal-table { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: #0b1120; overflow: hidden; }
         body.light .terminal-table { background: #f6f8fc; border-color: rgba(31,36,48,0.12); }
-        .terminal-header, .terminal-row { display: grid; grid-template-columns: 82px 160px 160px 1fr 110px; gap: 0.4rem; padding: 0.55rem 0.8rem; align-items: center; }
+        .terminal-header, .terminal-row { display: grid; grid-template-columns: 82px 160px 150px 120px 1fr 110px; gap: 0.4rem; padding: 0.55rem 0.8rem; align-items: center; }
         .terminal-header { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--muted-text); background: rgba(255,255,255,0.04); }
         body.light .terminal-header { background: rgba(31,36,48,0.04); }
         .terminal-row { font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.04); }
         body.light .terminal-row { border-color: rgba(31,36,48,0.08); }
         .terminal-row:nth-child(even) { background: rgba(255,255,255,0.02); }
         body.light .terminal-row:nth-child(even) { background: rgba(31,36,48,0.04); }
-        .terminal-pid { color: #90cdf4; }
+        .terminal-pid { color: var(--param-value); }
         .terminal-name { font-weight: 600; display: flex; flex-direction: column; gap: 0.1rem; }
         .terminal-name small { font-weight: 400; text-transform: uppercase; font-size: 0.7rem; color: var(--muted-text); letter-spacing: 0.05em; }
         .terminal-feb { color: #fbbf24; font-weight: 600; }
         body.light .terminal-feb { color: #b45309; }
+        .terminal-omp { color: var(--muted-text); font-weight: 600; }
+        body.light .terminal-omp { color: #1f2933; }
         .terminal-command { color: var(--muted-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .terminal-age { color: #a5f3fc; font-size: 0.8rem; text-align: right; }
         body.light .terminal-age { color: #0f766e; }
@@ -1196,11 +1198,17 @@ class MonitorPageTemplate:
               const commandRaw = cmdline.length ? cmdline.join(' ') : '';
               const cmd = commandRaw ? escapeHtml(commandRaw) : '—';
               const cmdTitle = commandRaw ? ` title="${escapeHtml(commandRaw)}"` : '';
+              const threads =
+                typeof proc.omp_threads === 'number' && Number.isFinite(proc.omp_threads)
+                  ? proc.omp_threads
+                  : null;
+              const threadsLabel = threads ? `${threads}` : '—';
               const age = formatProcessAge(proc.started_at);
               return `<div class="terminal-row">
                 <span class="terminal-pid">#${pid}</span>
                 <span class="terminal-name">${name}${status}</span>
                 <span class="terminal-feb">${febCell}</span>
+                <span class="terminal-omp">${threadsLabel}</span>
                 <span class="terminal-command"${cmdTitle}>${cmd}</span>
                 <span class="terminal-age">${age}</span>
               </div>`;
@@ -1211,6 +1219,7 @@ class MonitorPageTemplate:
               <span>PID</span>
               <span>Process</span>
               <span>FEB file</span>
+              <span>OMP</span>
               <span>Command</span>
               <span>Uptime</span>
             </div>
