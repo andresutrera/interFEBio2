@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import time
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,7 @@ class SystemStatsCollector:
             "disks": disks,
         }
         if load_avg is not None:
-            snapshot["load_avg"] = list(load_avg)
+            snapshot["load_avg"] = [self._clean_number(value) for value in load_avg]
         return snapshot
 
     def collect_processes(
@@ -167,13 +168,15 @@ class SystemStatsCollector:
     def _safe_cpu_percent() -> float | None:
         if psutil is not None:
             try:
-                return float(psutil.cpu_percent(interval=None))
+                value = psutil.cpu_percent(interval=None)
+                return SystemStatsCollector._clean_number(value)
             except Exception:  # pragma: no cover
                 return None
         try:
             load1, _, _ = os.getloadavg()
             cores = os.cpu_count() or 1
-            return max(0.0, min(100.0, (load1 / cores) * 100.0))
+            value = max(0.0, min(100.0, (load1 / cores) * 100.0))
+            return SystemStatsCollector._clean_number(value)
         except (AttributeError, OSError):  # pragma: no cover - platform-specific
             return None
 
@@ -190,10 +193,10 @@ class SystemStatsCollector:
         used = max(total - available, 0.0)
         percent = (used / total * 100.0) if total else 0.0
         return {
-            "total": total,
-            "available": available,
-            "used": used,
-            "percent": percent,
+            "total": SystemStatsCollector._clean_number(total),
+            "available": SystemStatsCollector._clean_number(available),
+            "used": SystemStatsCollector._clean_number(used),
+            "percent": SystemStatsCollector._clean_number(percent),
         }
 
     def _safe_memory_stats(self) -> dict[str, float] | None:
@@ -201,10 +204,10 @@ class SystemStatsCollector:
             try:
                 stats = psutil.virtual_memory()
                 return {
-                    "total": float(stats.total),
-                    "available": float(stats.available),
-                    "used": float(stats.used),
-                    "percent": float(stats.percent),
+                    "total": self._clean_number(stats.total),
+                    "available": self._clean_number(stats.available),
+                    "used": self._clean_number(stats.used),
+                    "percent": self._clean_number(stats.percent),
                 }
             except Exception:  # pragma: no cover
                 return None
@@ -239,10 +242,10 @@ class SystemStatsCollector:
                         "mount": part.mountpoint,
                         "device": part.device,
                         "fstype": part.fstype,
-                        "total": float(usage.total),
-                        "used": float(usage.used),
-                        "free": float(usage.free),
-                        "percent": float(usage.percent),
+                        "total": self._clean_number(usage.total),
+                        "used": self._clean_number(usage.used),
+                        "free": self._clean_number(usage.free),
+                        "percent": self._clean_number(usage.percent),
                     }
                 )
         if not disks:
@@ -256,16 +259,29 @@ class SystemStatsCollector:
                         "mount": "/" if os.name != "nt" else "C:/",
                         "device": None,
                         "fstype": None,
-                        "total": float(usage.total),
-                        "used": float(usage.used),
-                        "free": float(usage.free),
-                        "percent": float(usage.used) / float(usage.total) * 100.0
-                        if usage.total
-                        else 0.0,
+                        "total": self._clean_number(usage.total),
+                        "used": self._clean_number(usage.used),
+                        "free": self._clean_number(usage.free),
+                        "percent": self._clean_number(
+                            float(usage.used) / float(usage.total) * 100.0
+                            if usage.total
+                            else 0.0
+                        ),
                     }
                 )
         disks.sort(key=lambda item: item.get("total", 0.0), reverse=True)
         return disks[: self.disk_limit]
+
+    @staticmethod
+    def _clean_number(value: Any) -> float | None:
+        """Return a JSON-safe float or ``None`` when the value is invalid."""
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if isfinite(number):
+            return number
+        return None
 
 
 __all__ = ["SystemStatsCollector"]
