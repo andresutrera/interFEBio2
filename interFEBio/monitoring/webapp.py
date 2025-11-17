@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -32,6 +33,23 @@ TEMPLATE = MonitorPageTemplate()
 def render_home_page() -> str:
     """Render the static HTML shell for the monitor dashboard."""
     return TEMPLATE.render()
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively sanitise values so JSON encoding never sees NaN/Inf."""
+    if isinstance(value, (str, bool)) or value is None:
+        return value
+    if isinstance(value, (int,)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        return value
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def create_app(
@@ -83,7 +101,7 @@ def create_app(
                     "optimizer": meta.get("optimizer"),
                 }
             )
-        return payload
+        return _json_safe(payload)
 
     @app.get("/api/system/metrics")
     async def system_metrics():
@@ -106,7 +124,7 @@ def create_app(
                     {"kind": art.kind, "path": str(art.path), "size": art.size}
                     for art in job.artifacts
                 ]
-        return data
+        return _json_safe(data)
 
     @app.get("/api/runs/{run_id}/processes")
     async def run_processes(run_id: str):
@@ -132,12 +150,12 @@ def create_app(
             processes = system_stats.collect_processes(root=candidate)
             if processes:
                 break
-        return {
+        return _json_safe({
             "run_id": run_id,
             "root": root_used,
             "processes": processes,
             "supported": system_stats.process_support,
-        }
+        })
 
     @app.get("/api/runs/{run_id}/iterations")
     async def run_iterations(run_id: str):
@@ -146,7 +164,7 @@ def create_app(
         run = registry.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
-        return [record.to_dict() for record in run.iterations]
+        return _json_safe([record.to_dict() for record in run.iterations])
 
     @app.delete("/api/runs/{run_id}")
     async def delete_run(run_id: str, force: bool = False):
