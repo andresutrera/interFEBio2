@@ -174,6 +174,7 @@ class RunReporter:
         }
         meta = {
             "storage_root": str(self.workspace.persist_root),
+            "runtime_root": str(self.workspace.workdir),
             "runner_jobs": runner_jobs,
         }
         assert self._monitor_client is not None

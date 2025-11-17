@@ -116,13 +116,25 @@ def create_app(
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
         meta = run.meta if isinstance(run.meta, dict) else {}
+        runtime_root = meta.get("runtime_root")
         storage_root = meta.get("storage_root")
+        roots: list[str] = []
+        if runtime_root is not None:
+            roots.append(str(runtime_root))
         if storage_root is not None:
-            storage_root = str(storage_root)
-        processes = system_stats.collect_processes(root=storage_root)
+            storage_str = str(storage_root)
+            if not roots or storage_str not in roots:
+                roots.append(storage_str)
+        root_used: str | None = None
+        processes: list[dict[str, object]] = []
+        for candidate in roots:
+            root_used = candidate
+            processes = system_stats.collect_processes(root=candidate)
+            if processes:
+                break
         return {
             "run_id": run_id,
-            "root": storage_root,
+            "root": root_used,
             "processes": processes,
             "supported": system_stats.process_support,
         }
