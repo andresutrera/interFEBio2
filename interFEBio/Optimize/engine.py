@@ -252,6 +252,7 @@ class Engine:
 
     def _build_jacobian_wrapper(self) -> Callable[[Array], Array]:
         assert self.jacobian is not None
+        jac = self.jacobian
         label_fn = self._jacobian_label_fn()
 
         def jacobian(phi_vec: Array) -> Array:
@@ -266,7 +267,7 @@ class Engine:
                 raise RuntimeError(
                     "Residuals must be evaluated before computing the Jacobian."
                 )
-            if self.jacobian.parallel:
+            if jac.parallel:
                 if (
                     self._cached_jac_phi is not None
                     and self._cached_jacobian is not None
@@ -284,7 +285,7 @@ class Engine:
                     theta_vec, iter_dir, lbl, track_series=False
                 )
 
-            _, J = self.jacobian.compute(
+            _, J = jac.compute(
                 phi_vec,
                 self.parameter_mapper.phi_to_theta,
                 residual_with_label,
