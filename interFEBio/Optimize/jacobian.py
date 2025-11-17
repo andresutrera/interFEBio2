@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, cast
-import inspect
 
 import numpy as np
 from numpy.typing import NDArray

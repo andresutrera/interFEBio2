@@ -5,9 +5,11 @@ from __future__ import annotations
 import shutil
 import warnings
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping, Sequence
 
+from .options import CleanupOptions, StorageOptions
 
 def _unescape_mount_token(token: str) -> str:
     """Decode escape sequences used in ``/proc/mounts`` entries."""
@@ -126,4 +128,145 @@ class StorageManager:
                 child.unlink(missing_ok=True)
 
 
-__all__ = ["StorageManager"]
+class StorageWorkspace:
+    """Manage working directories, persistent artefacts, and series exports."""
+
+    def __init__(self, storage_opts: StorageOptions, cleanup_opts: CleanupOptions) -> None:
+        storage_mode = storage_opts.mode.lower()
+        if storage_mode not in {"disk", "tmp"}:
+            raise ValueError("storage_mode must be 'disk' or 'tmp'")
+        cleanup_mode = cleanup_opts.mode.lower()
+        cleanup_previous = bool(cleanup_opts.remove_previous)
+        if storage_mode == "tmp":
+            cleanup_previous = True
+            cleanup_mode = "all"
+        if cleanup_mode not in {"none", "retain_best", "all"}:
+            raise ValueError("cleanup_mode must be one of: 'none', 'retain_best', 'all'")
+
+        parent = Path(storage_opts.root).expanduser() if storage_opts.root is not None else None
+        self.storage = StorageManager(parent=parent, use_tmp=(storage_mode == "tmp"))
+        self.storage_mode = storage_mode
+        self.cleanup_mode = cleanup_mode
+        self.cleanup_previous = cleanup_previous
+        self.workdir = self.storage.resolve()
+        if storage_mode == "tmp":
+            if storage_opts.root is not None:
+                persist_root = Path(storage_opts.root).expanduser().resolve()
+            else:
+                persist_root = Path.cwd() / self.workdir.name
+            persist_root.mkdir(parents=True, exist_ok=True)
+            self.persist_root = persist_root
+        else:
+            self.persist_root = self.workdir
+        self.log_file = self._resolve_log_file(storage_opts.log_file, storage_opts.root)
+        self._iter_dirs: list[Path] = []
+        self._eval_index = 0
+
+    def describe(self) -> list[str]:
+        return [
+            f"• mode: {self.storage_mode}",
+            f"• workdir: {self.workdir}",
+            f"• persist_root: {self.persist_root}",
+            f"• cleanup_mode: {self.cleanup_mode}",
+            f"• remove_previous: {self.cleanup_previous}",
+        ]
+
+    def next_iter_dir(self) -> Path:
+        self._eval_index += 1
+        iter_dir = self.workdir / f"eval{self._eval_index}"
+        iter_dir.mkdir(parents=True, exist_ok=True)
+        self._iter_dirs.append(iter_dir)
+        return iter_dir
+
+    def prune_old_iterations(self, last_iter_dir: Path | None) -> None:
+        if not self.cleanup_previous:
+            return
+        keep: set[Path] = set()
+        if last_iter_dir is not None:
+            keep.add(last_iter_dir.resolve())
+        retained: list[Path] = []
+        for dir_path in self._iter_dirs:
+            resolved = dir_path.resolve()
+            if resolved in keep:
+                retained.append(dir_path)
+            else:
+                self.storage.cleanup_path(dir_path)
+        self._iter_dirs = retained
+
+    def final_cleanup(self, last_iter_dir: Path | None) -> None:
+        if self.storage_mode == "tmp":
+            self._persist_best(last_iter_dir)
+            shutil.rmtree(self.workdir, ignore_errors=True)
+            self._iter_dirs = []
+            return
+
+        if self.cleanup_mode == "none":
+            return
+        keep_paths: set[Path] = set()
+        if self.cleanup_mode == "retain_best" and last_iter_dir is not None:
+            keep_paths.add(last_iter_dir.resolve())
+        self.storage.cleanup_all(keep_paths if keep_paths else None)
+        if keep_paths:
+            keep_resolved = {p.resolve() for p in keep_paths}
+            self._iter_dirs = [path for path in self._iter_dirs if path.resolve() in keep_resolved]
+        else:
+            self._iter_dirs = []
+
+    def write_series(self, series: Mapping[str, Mapping[str, Sequence[float]]]) -> None:
+        if not series:
+            return
+        target_dir = self.log_file.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for key, payload in series.items():
+            x_vals = payload.get("x")
+            exp_vals = payload.get("y_exp")
+            sim_vals = payload.get("y_sim")
+            if not (x_vals and exp_vals and sim_vals):
+                continue
+            length = min(len(x_vals), len(exp_vals), len(sim_vals))
+            if length == 0:
+                continue
+            safe_name = key.replace("/", "_")
+            path = target_dir / f"{safe_name}_series.txt"
+            lines = [f"# {key}\n", "# x y_exp y_sim\n"]
+            for idx in range(length):
+                lines.append(f"{x_vals[idx]:.10g} {exp_vals[idx]:.10g} {sim_vals[idx]:.10g}\n")
+            path.write_text("".join(lines), encoding="utf-8")
+
+    def _persist_best(self, last_iter_dir: Path | None) -> None:
+        best_dir = last_iter_dir
+        if best_dir is None:
+            return
+        best_dir = best_dir.resolve()
+        if not best_dir.exists():
+            return
+        dest = self.persist_root / best_dir.name
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        shutil.copytree(best_dir, dest, dirs_exist_ok=True)
+
+    @staticmethod
+    def _resolve_log_file(log_file: str | Path | None, storage_root: str | Path | None) -> Path:
+        path: Path | None = None
+        if log_file is not None:
+            candidate = str(log_file).strip()
+            if candidate:
+                path = Path(candidate).expanduser()
+        if path is None:
+            base: Path | None = None
+            if storage_root is not None:
+                storage_str = str(storage_root).strip()
+                if storage_str:
+                    base = Path(storage_str).expanduser()
+            if base is not None:
+                base.mkdir(parents=True, exist_ok=True)
+                path = base / "optimization.log"
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                path = Path.cwd() / f"optimization_{timestamp}.log"
+        resolved = path.expanduser()
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        return resolved
+
+
+__all__ = ["StorageManager", "StorageWorkspace"]

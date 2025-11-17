@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Iterable, Sequence, cast
+from typing import Any, Callable, Iterable, Mapping, Sequence, cast
 
 import numpy as np
 
@@ -24,6 +24,17 @@ class OptimizerAdapter:
         """Minimise the objective using the configured optimiser."""
         """Minimise the objective using the configured optimiser."""
         raise NotImplementedError
+
+    @staticmethod
+    def build(name: str, options: Mapping[str, Any] | None) -> "OptimizerAdapter":
+        opts = dict(options or {})
+        key = name.lower()
+        if key == "least_squares":
+            return ScipyLeastSquaresAdapter(**opts)
+        if key == "minimize":
+            method = opts.pop("method", "L-BFGS-B")
+            return ScipyMinimizeAdapter(method=method, **opts)
+        raise ValueError(f"Unsupported optimizer: {name}")
 
 
 class ScipyLeastSquaresAdapter(OptimizerAdapter):

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 Array = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
+BoundsPayload = tuple[Array, Array] | Sequence[tuple[float, float]] | None
 
 
 @dataclass(frozen=True)
@@ -339,4 +340,48 @@ class ParameterSpace:
         self._th_hi = cast(Array, np.asarray(hi_vals, dtype=float)) if any_hi else None
 
 
-__all__ = ["Parameter", "ParameterSpace"]
+class ParameterMapper:
+    """Helper object that exposes φ/θ conversions and bounds for the engine."""
+
+    def __init__(self, space: ParameterSpace, use_reparam: bool) -> None:
+        self._space = space
+        self._reparam = bool(use_reparam)
+
+    @property
+    def names(self) -> Sequence[str]:
+        return list(self._space.names)
+
+    def initial_phi(self, phi0: Sequence[float] | None) -> Array:
+        if phi0 is not None:
+            return cast(Array, np.asarray(phi0, dtype=float))
+        if self._reparam:
+            return cast(Array, np.zeros(len(self.names), dtype=float))
+        theta0_vec = self._space.pack_dict(self._space.theta0)
+        return cast(Array, np.asarray(theta0_vec, dtype=float))
+
+    def bounds(self, bounds: Sequence[tuple[float, float]] | None) -> BoundsPayload:
+        if bounds is not None:
+            return bounds
+        return self._space.phi_bounds() if self._reparam else self._space.theta_bounds_array()
+
+    def phi_to_theta(self, phi_vec: Array) -> Array:
+        phi_vec = cast(Array, np.asarray(phi_vec, dtype=float))
+        if self._reparam:
+            theta_vec = self._space.theta_from_phi(phi_vec)
+        else:
+            theta_vec = phi_vec
+        theta_vec = self._space.clamp_theta(theta_vec)
+        return cast(Array, np.asarray(theta_vec, dtype=float))
+
+    def theta_dict(self, theta_vec: Array) -> Dict[str, float]:
+        theta_vec = cast(Array, np.asarray(theta_vec, dtype=float))
+        return self._space.unpack_vec(theta_vec.tolist())
+
+    def theta_from_phi(self, phi_vec: Array) -> Array:
+        return self.phi_to_theta(phi_vec)
+
+    def clamp_theta(self, theta_vec: Array) -> Array:
+        return self._space.clamp_theta(theta_vec)
+
+
+__all__ = ["Parameter", "ParameterSpace", "ParameterMapper", "BoundsPayload"]

@@ -1342,7 +1342,7 @@ class MonitorPageTemplate:
             seriesLiveBtn.textContent = 'Back to latest';
           } else {
             seriesLiveBtn.style.display = '';
-            seriesLiveBtn.textContent = `Back to latest (iter ${lockedSeriesIndex})`;
+            seriesLiveBtn.textContent = `Back to latest (current: iter ${lockedSeriesIndex})`;
           }
         }
 
