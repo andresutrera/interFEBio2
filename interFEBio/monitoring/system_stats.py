@@ -269,7 +269,7 @@ class SystemStatsCollector:
                         ),
                     }
                 )
-        disks.sort(key=lambda item: item.get("total", 0.0), reverse=True)
+        disks.sort(key=lambda item: item.get("total") or 0.0, reverse=True)
         return disks[: self.disk_limit]
 
     @staticmethod
