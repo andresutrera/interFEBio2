@@ -132,6 +132,24 @@ class MonitorPageTemplate:
         .param-row { display: flex; justify-content: space-between; gap: 0.5rem; }
         .param-row span:last-child { color: var(--param-value); }
         .status-reason { display: block; font-size: 0.8rem; color: #ff9b9b; margin-top: 0.15rem; line-height: 1.3; }
+        .terminal-table { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: #0b1120; overflow: hidden; }
+        body.light .terminal-table { background: #f6f8fc; border-color: rgba(31,36,48,0.12); }
+        .terminal-header, .terminal-row { display: grid; grid-template-columns: 82px 160px 160px 1fr 110px; gap: 0.4rem; padding: 0.55rem 0.8rem; align-items: center; }
+        .terminal-header { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--muted-text); background: rgba(255,255,255,0.04); }
+        body.light .terminal-header { background: rgba(31,36,48,0.04); }
+        .terminal-row { font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.04); }
+        body.light .terminal-row { border-color: rgba(31,36,48,0.08); }
+        .terminal-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+        body.light .terminal-row:nth-child(even) { background: rgba(31,36,48,0.04); }
+        .terminal-pid { color: #90cdf4; }
+        .terminal-name { font-weight: 600; display: flex; flex-direction: column; gap: 0.1rem; }
+        .terminal-name small { font-weight: 400; text-transform: uppercase; font-size: 0.7rem; color: var(--muted-text); letter-spacing: 0.05em; }
+        .terminal-feb { color: #fbbf24; font-weight: 600; }
+        body.light .terminal-feb { color: #b45309; }
+        .terminal-command { color: var(--muted-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .terminal-age { color: #a5f3fc; font-size: 0.8rem; text-align: right; }
+        body.light .terminal-age { color: #0f766e; }
+        .terminal-empty { margin: 0; padding: 0.8rem; text-align: center; color: var(--muted-text); }
         .page-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .page-header h1 { font-size: 1.6rem; margin: 0 0 0.35rem 0; }
         .page-header p { margin: 0; opacity: 0.65; }
@@ -215,6 +233,15 @@ class MonitorPageTemplate:
               </div>
               <div id="seriesChart" class="chart"></div>
             </div>
+          <div class="chart-wrapper" id="processPanel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+              <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Live FEBio processes</h3>
+              <span class="stat-pill" id="processSummary">--</span>
+            </div>
+            <div id="processTable" class="terminal-table">
+              <p class="terminal-empty">Select a run to inspect simulations.</p>
+            </div>
+          </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.1rem;">
             <h3 style="font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75; margin:0;">Raw JSON</h3>
             <button id="toggleJson" class="ghost-button" style="margin-right:0;">Expand</button>
@@ -268,6 +295,8 @@ class MonitorPageTemplate:
         const diskPiesEl = document.getElementById('diskPies');
         const systemSummaryEl = document.getElementById('systemSummary');
         const diskSummaryEl = document.getElementById('diskSummary');
+        const processTableEl = document.getElementById('processTable');
+        const processSummaryEl = document.getElementById('processSummary');
         const runsPanel = document.getElementById('runsPanel');
         const toggleSelectionBtn = document.getElementById('toggleSelection');
         const selectionToolbar = document.getElementById('selectionToolbar');
@@ -286,6 +315,7 @@ class MonitorPageTemplate:
         let lockedIterationIndex = null;
         let currentDetailData = null;
         let latestSystemSnapshot = null;
+        let processTimer = null;
         const selectedRuns = new Set();
         let selectionMode = false;
         let systemPanelCollapsed = false;
@@ -961,6 +991,7 @@ class MonitorPageTemplate:
         async function showDetail(runId) {
           selectedRunId = runId;
           await refreshDetail(runId);
+          startProcessPolling(runId);
         }
 
         function renderSummary(data) {
@@ -1092,13 +1123,167 @@ class MonitorPageTemplate:
               }
             });
           }
-          if (rows.length) {
+        if (rows.length) {
             return { label: 'Parameters', value: `<div class="param-grid">${rows.join('')}</div>` };
           }
           if (names.length) {
             return { label: 'Parameters', value: names.map(escapeHtml).join(', ') };
           }
           return null;
+        }
+
+        function renderProcessMessage(message, summary = 'Idle') {
+          if (!processTableEl) {
+            return;
+          }
+          processTableEl.innerHTML = `<p class="terminal-empty">${escapeHtml(message)}</p>`;
+          if (processSummaryEl) {
+            processSummaryEl.textContent = summary;
+          }
+        }
+
+        function extractFebFilename(cmdline) {
+          if (!Array.isArray(cmdline)) {
+            return null;
+          }
+          for (let idx = cmdline.length - 1; idx >= 0; idx -= 1) {
+            const part = cmdline[idx];
+            if (typeof part !== 'string') {
+              continue;
+            }
+            const trimmed = part.trim();
+            if (!trimmed || !trimmed.toLowerCase().endsWith('.feb')) {
+              continue;
+            }
+            const segments = trimmed.split(/[/\\\\]/);
+            const name = segments[segments.length - 1];
+            if (name) {
+              return name;
+            }
+          }
+          return null;
+        }
+
+        function renderProcessState(payload) {
+          if (!processTableEl) {
+            return;
+          }
+          if (!payload) {
+            renderProcessMessage('Select a run to inspect simulations.', '--');
+            return;
+          }
+          if (payload.supported === false) {
+            renderProcessMessage('Process tracking is unavailable on this host.', 'Unavailable');
+            return;
+          }
+          if (!payload.root) {
+            renderProcessMessage('This run did not report a storage root; unable to match processes.', 'Unknown');
+            return;
+          }
+          const processes = Array.isArray(payload.processes) ? payload.processes : [];
+          if (!processes.length) {
+            renderProcessMessage('No FEBio simulations detected right now.', 'Idle');
+            return;
+          }
+          const rows = processes
+            .map((proc) => {
+              const pid = typeof proc.pid === 'number' ? proc.pid : '-';
+              const name = proc.name ? escapeHtml(proc.name) : 'process';
+              const status = proc.status ? `<small>${escapeHtml(proc.status)}</small>` : '';
+              const febFile = extractFebFilename(proc.cmdline);
+              const febCell = febFile ? escapeHtml(febFile) : '—';
+              const cmdline = Array.isArray(proc.cmdline) ? proc.cmdline : [];
+              const commandRaw = cmdline.length ? cmdline.join(' ') : '';
+              const cmd = commandRaw ? escapeHtml(commandRaw) : '—';
+              const cmdTitle = commandRaw ? ` title="${escapeHtml(commandRaw)}"` : '';
+              const age = formatProcessAge(proc.started_at);
+              return `<div class="terminal-row">
+                <span class="terminal-pid">#${pid}</span>
+                <span class="terminal-name">${name}${status}</span>
+                <span class="terminal-feb">${febCell}</span>
+                <span class="terminal-command"${cmdTitle}>${cmd}</span>
+                <span class="terminal-age">${age}</span>
+              </div>`;
+            })
+            .join('');
+          processTableEl.innerHTML = `
+            <div class="terminal-header">
+              <span>PID</span>
+              <span>Process</span>
+              <span>FEB file</span>
+              <span>Command</span>
+              <span>Uptime</span>
+            </div>
+            ${rows}
+          `;
+          if (processSummaryEl) {
+            processSummaryEl.textContent = `${processes.length} active`;
+          }
+        }
+
+        function formatProcessAge(startedAt) {
+          if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) {
+            return '—';
+          }
+          const now = Date.now() / 1000;
+          const delta = Math.max(0, now - startedAt);
+          const hours = Math.floor(delta / 3600);
+          const minutes = Math.floor((delta % 3600) / 60);
+          const seconds = Math.floor(delta % 60);
+          if (hours > 0) {
+            return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+          }
+          if (minutes > 0) {
+            return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+          }
+          return `${seconds}s`;
+        }
+
+        async function loadRunProcesses(runId, { silent = false } = {}) {
+          if (!processTableEl || !runId) {
+            return;
+          }
+          if (!silent) {
+            renderProcessMessage('Collecting process info...', 'Loading');
+          }
+          try {
+            const res = await fetch(`/api/runs/${runId}/processes`, { cache: 'no-store' });
+            if (!res.ok) {
+              throw new Error('Failed to load process list');
+            }
+            const data = await res.json();
+            if (runId !== selectedRunId) {
+              return;
+            }
+            renderProcessState(data);
+          } catch (err) {
+            console.error(err);
+            if (!silent) {
+              renderProcessMessage('Unable to read process list.', 'Unavailable');
+            }
+          }
+        }
+
+        function startProcessPolling(runId) {
+          if (!processTableEl || !runId) {
+            return;
+          }
+          stopProcessPolling();
+          loadRunProcesses(runId);
+          processTimer = setInterval(() => {
+            if (selectedRunId !== runId) {
+              stopProcessPolling();
+              return;
+            }
+            loadRunProcesses(runId, { silent: true });
+          }, 4000);
+        }
+
+        function stopProcessPolling() {
+          if (processTimer) {
+            clearInterval(processTimer);
+            processTimer = null;
+          }
         }
 
         function renderIterations(data) {
@@ -1211,6 +1396,8 @@ class MonitorPageTemplate:
           detailJson.style.maxHeight = '0';
           detailJson.style.overflowY = 'hidden';
           detailJson.style.visibility = 'hidden';
+          stopProcessPolling();
+          renderProcessMessage('Select a run to inspect simulations.', '--');
           selectedRunId = null;
           currentSeriesData = {};
           currentDetailData = null;

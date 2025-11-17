@@ -19,6 +19,12 @@ class SystemStatsCollector:
 
     def __init__(self, *, disk_limit: int = 4) -> None:
         self.disk_limit = max(1, disk_limit)
+        self._process_enabled = psutil is not None
+
+    @property
+    def process_support(self) -> bool:
+        """Return ``True`` when process inspection is available."""
+        return self._process_enabled
 
     def collect(self) -> dict[str, Any]:
         """Return a snapshot of host CPU, memory, and disk usage."""
@@ -38,6 +44,106 @@ class SystemStatsCollector:
         if load_avg is not None:
             snapshot["load_avg"] = list(load_avg)
         return snapshot
+
+    def collect_processes(
+        self,
+        *,
+        root: str | os.PathLike[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return lightweight process info filtered to those under ``root``."""
+        if not self._process_enabled:
+            return []
+        assert psutil is not None  # for type-checkers
+        root_path = self._normalize_root(root)
+        if root is not None and root_path is None:
+            return []
+        if root_path is None:
+            return []
+        entries: list[dict[str, Any]] = []
+        try:
+            iterator = psutil.process_iter(
+                [
+                    "pid",
+                    "name",
+                    "cmdline",
+                    "cwd",
+                    "create_time",
+                    "status",
+                ]
+            )
+        except Exception:
+            return []
+        for proc in iterator:
+            info = getattr(proc, "info", {}) or {}
+            try:
+                if root_path and not self._process_matches_root(info, root_path):
+                    continue
+                entries.append(self._summarize_process(info))
+            except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
+                continue
+            except Exception:
+                continue
+        entries.sort(key=lambda item: (item.get("started_at") or 0.0, item["pid"]))
+        return entries
+
+    @staticmethod
+    def _normalize_root(root: str | os.PathLike[str] | None) -> Path | None:
+        if root is None:
+            return None
+        try:
+            return Path(root).expanduser().resolve()
+        except OSError:
+            try:
+                return Path(root).expanduser()
+            except Exception:
+                return None
+
+    @staticmethod
+    def _process_matches_root(info: dict[str, Any], root: Path) -> bool:
+        cwd = info.get("cwd")
+        if isinstance(cwd, str) and cwd:
+            try:
+                cwd_path = Path(cwd).resolve()
+            except OSError:
+                cwd_path = Path(cwd)
+            if SystemStatsCollector._is_relative_to(cwd_path, root):
+                return True
+        cmdline = info.get("cmdline") or []
+        root_str = str(root)
+        for arg in cmdline:
+            if isinstance(arg, str) and root_str in arg:
+                return True
+        return False
+
+    @staticmethod
+    def _is_relative_to(candidate: Path, base: Path) -> bool:
+        try:
+            candidate.relative_to(base)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _summarize_process(info: dict[str, Any]) -> dict[str, Any]:
+        cmdline = [str(arg) for arg in info.get("cmdline") or []]
+        started_at = info.get("create_time")
+        try:
+            started = float(started_at) if started_at is not None else None
+        except (TypeError, ValueError):
+            started = None
+        pid_value = info.get("pid")
+        try:
+            pid = int(pid_value)
+        except (TypeError, ValueError):
+            pid = -1
+        return {
+            "pid": pid,
+            "name": info.get("name") or "",
+            "status": info.get("status"),
+            "cmdline": cmdline,
+            "cwd": info.get("cwd"),
+            "started_at": started,
+        }
 
     @staticmethod
     def _safe_cpu_percent() -> float | None:

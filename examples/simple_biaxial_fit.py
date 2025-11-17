@@ -30,7 +30,7 @@ WORK_ROOT = HERE / "work_biaxial"
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 FEBIO_COMMAND = ("febio4", "-i")
-PARALLEL_JOBS = 2
+PARALLEL_JOBS = 5
 
 FIXED_GRID = np.linspace(0.0, 2.0, 51)
 
@@ -61,7 +61,7 @@ def build_case(exp_series: ExperimentSeries, name: str) -> SimulationCase:
         subfolder="biaxial",
         experiments={name: exp_series},
         adapters={name: SimulationAdapter(read_sigma_xx)},
-        omp_threads=1,
+        omp_threads=5,
         grids={
             name: GridPolicyOptions(policy="fixed_user", values=FIXED_GRID.tolist())
         },
@@ -78,7 +78,7 @@ def main() -> None:
     case2 = build_case(exp_series, "biax2")
 
     options = EngineOptions(
-        jacobian=JacobianOptions(enabled=True, perturbation=1e-3, parallel=True),
+        jacobian=JacobianOptions(enabled=False, perturbation=1e-3, parallel=True),
         cleanup=CleanupOptions(remove_previous=True, mode="all"),
         runner=RunnerOptions(jobs=PARALLEL_JOBS, command=FEBIO_COMMAND),
         storage=StorageOptions(mode="disk", root=WORK_ROOT),

@@ -108,6 +108,25 @@ def create_app(
                 ]
         return data
 
+    @app.get("/api/runs/{run_id}/processes")
+    async def run_processes(run_id: str):
+        """Return OS processes likely associated with this run."""
+        registry.refresh()
+        run = registry.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        meta = run.meta if isinstance(run.meta, dict) else {}
+        storage_root = meta.get("storage_root")
+        if storage_root is not None:
+            storage_root = str(storage_root)
+        processes = system_stats.collect_processes(root=storage_root)
+        return {
+            "run_id": run_id,
+            "root": storage_root,
+            "processes": processes,
+            "supported": system_stats.process_support,
+        }
+
     @app.get("/api/runs/{run_id}/iterations")
     async def run_iterations(run_id: str):
         """Return the iteration history for the selected run."""
