@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Literal, cast
 
 import numpy as np
-from scipy.interpolate import interp1d
 from numpy.typing import NDArray
+from scipy.interpolate import interp1d
 
 Array = NDArray[np.float64]
 

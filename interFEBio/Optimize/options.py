@@ -6,12 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
-from .alignment import GridPolicy
-
-CleanupMode = Literal["none", "retain_best", "all"]
-StorageMode = Literal["disk", "tmp"]
-OptimizerName = Literal["least_squares", "minimize"]
-
 
 @dataclass(slots=True)
 class GridPolicyOptions:
@@ -26,7 +20,7 @@ class GridPolicyOptions:
             ``"fixed_user"``, allowing the user to enforce a shared abscissa.
     """
 
-    policy: GridPolicy = "exp_to_sim"
+    policy: Literal["exp_to_sim", "fixed_user"] = "exp_to_sim"
     values: Sequence[float] | None = None
 
 
@@ -65,7 +59,7 @@ class CleanupOptions:
     """
 
     remove_previous: bool = False
-    mode: CleanupMode = "none"
+    mode: Literal["none", "retain_best", "all"] = "none"
 
 
 @dataclass(slots=True)
@@ -103,7 +97,7 @@ class StorageOptions:
             collecting diagnostics.
     """
 
-    mode: StorageMode = "disk"
+    mode: Literal["disk", "tmp"] = "disk"
     root: str | Path | None = None
     log_file: str | Path | None = None
 
@@ -145,7 +139,7 @@ class OptimizerOptions:
             on θ values, effectively ignoring the ``xi`` reparameterisation.
     """
 
-    name: OptimizerName = "least_squares"
+    name: Literal["least_squares", "minimize"] = "least_squares"
     settings: Mapping[str, Any] = field(default_factory=dict)
     reparametrize: bool = True
 

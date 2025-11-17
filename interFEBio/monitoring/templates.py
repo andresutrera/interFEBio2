@@ -195,7 +195,10 @@ class MonitorPageTemplate:
         </section>
         <section class="panel" id="detail" hidden>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
-            <h2 id="detailTitle" style="margin-bottom:0.4rem;">Run detail</h2>
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <h2 id="detailTitle" style="margin-bottom:0.4rem;">Run detail</h2>
+              <button id="detailLiveToggle" class="ghost-button" style="display:none;">Back to latest</button>
+            </div>
             <button id="closeDetail" style="margin-right:0; background:rgba(99,115,255,0.25); padding:0.35rem 0.8rem;">Close</button>
           </div>
           <div class="detail-grid" id="detailSummary"></div>
@@ -207,7 +210,6 @@ class MonitorPageTemplate:
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3 style="margin:0; font-size:0.95rem; letter-spacing:0.03rem; text-transform:uppercase; opacity:0.75;">Experiment vs Simulation</h3>
                 <div style="display:flex; gap:0.4rem; align-items:center;">
-                  <button id="seriesLiveToggle" class="ghost-button" style="display:none;">Back to latest</button>
                   <select id="seriesSelect" class="series-select"></select>
                 </div>
               </div>
@@ -260,7 +262,7 @@ class MonitorPageTemplate:
         const closeDetailBtn = document.getElementById('closeDetail');
         const toggleJsonBtn = document.getElementById('toggleJson');
         const seriesSelect = document.getElementById('seriesSelect');
-        const seriesLiveBtn = document.getElementById('seriesLiveToggle');
+        const detailLiveBtn = document.getElementById('detailLiveToggle');
         const seriesChartEl = document.getElementById('seriesChart');
         const systemChartEl = document.getElementById('systemChart');
         const diskPiesEl = document.getElementById('diskPies');
@@ -281,7 +283,7 @@ class MonitorPageTemplate:
         let currentSeriesData = {};
         let iterationSeriesByIndex = {};
         let latestSeriesIndex = null;
-        let lockedSeriesIndex = null;
+        let lockedIterationIndex = null;
         let currentDetailData = null;
         let latestSystemSnapshot = null;
         const selectedRuns = new Set();
@@ -916,19 +918,19 @@ class MonitorPageTemplate:
           const seriesInfo = collectIterationSeries(data);
           iterationSeriesByIndex = seriesInfo.map || {};
           latestSeriesIndex = typeof seriesInfo.latestIndex === 'number' ? seriesInfo.latestIndex : null;
-          if (lockedSeriesIndex !== null) {
-            const ok = applySeriesFromIndex(lockedSeriesIndex, { lockMode: 'preserve', silent: true });
+          if (lockedIterationIndex !== null) {
+            const ok = applySeriesFromIndex(lockedIterationIndex, { lockMode: 'preserve', silent: true });
             if (!ok && typeof latestSeriesIndex === 'number') {
               applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
             } else if (!ok) {
               renderSeries(null);
-              updateSeriesLockUi();
+              updateIterationLockUi();
             }
           } else if (typeof latestSeriesIndex === 'number') {
             applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
           } else {
             renderSeries(null);
-            updateSeriesLockUi();
+            updateIterationLockUi();
           }
           if (detailJson) {
             if (refreshJson) {
@@ -964,32 +966,61 @@ class MonitorPageTemplate:
         function renderSummary(data) {
           const summary = [];
           const meta = data.meta || {};
+          const iterations = Array.isArray(data.iterations) ? data.iterations : [];
+          const latestIndex = iterations.length ? iterations.length - 1 : null;
+          const lockedIsValid =
+            typeof lockedIterationIndex === 'number'
+            && lockedIterationIndex >= 0
+            && lockedIterationIndex < iterations.length;
+          if (!lockedIsValid && lockedIterationIndex !== null) {
+            lockedIterationIndex = null;
+            updateIterationLockUi();
+          }
+          const activeIndex = lockedIsValid ? lockedIterationIndex : latestIndex;
+          const iteration = typeof activeIndex === 'number' ? iterations[activeIndex] : null;
+          if (iteration) {
+            const displayIndex = typeof iteration.index === 'number' ? iteration.index : activeIndex;
+            const contextLabel = lockedIsValid ? 'locked' : 'latest';
+            summary.push({ label: 'Iteration', value: `#${displayIndex} (${contextLabel})` });
+          }
           const statusRaw = typeof data.status === 'string' ? data.status : 'unknown';
           const statusLower = statusRaw.toLowerCase();
-          let statusValue = escapeHtml(statusRaw);
+          const statusSpan = `<span class="status ${statusLower}">${escapeHtml(statusRaw)}</span>`;
+          let statusValue = statusSpan;
           const failureReason = typeof meta.failure_reason === 'string' ? meta.failure_reason : null;
           if (statusLower === 'failed' && failureReason) {
             statusValue += `<span class="status-reason">${escapeHtml(failureReason)}</span>`;
           }
           summary.push({ label: 'Status', value: statusValue });
-          if (typeof meta.last_cost === 'number') {
+          const iterationCost = iteration && typeof iteration.cost === 'number' ? iteration.cost : null;
+          if (typeof iterationCost === 'number') {
+            summary.push({ label: 'Cost', value: iterationCost.toExponential(4) });
+          } else if (typeof meta.last_cost === 'number') {
             summary.push({ label: 'Last cost', value: meta.last_cost.toExponential(4) });
           }
-          if (meta.r_squared && typeof meta.r_squared === 'object') {
-            const entries = Object.entries(meta.r_squared)
+          const iterationMetrics =
+            iteration && iteration.metrics && typeof iteration.metrics === 'object' ? iteration.metrics : null;
+          const iterationRSquared =
+            iterationMetrics && iterationMetrics.r_squared && typeof iterationMetrics.r_squared === 'object'
+              ? iterationMetrics.r_squared
+              : null;
+          const metaRSquared = meta.r_squared && typeof meta.r_squared === 'object' ? meta.r_squared : null;
+          const rSquaredSource = iterationRSquared || metaRSquared;
+          if (rSquaredSource) {
+            const rows = Object.entries(rSquaredSource)
               .map(([key, value]) => {
                 const safeKey = escapeHtml(key);
-                if (value === null || value === undefined) {
-                  return `${safeKey}: -`;
+                let display = '-';
+                if (value !== null && value !== undefined) {
+                  const num = Number(value);
+                  if (Number.isFinite(num)) {
+                    display = num.toFixed(4);
+                  }
                 }
-                const num = Number(value);
-                if (!Number.isFinite(num)) {
-                  return `${safeKey}: -`;
-                }
-                return `${safeKey}: ${num.toFixed(4)}`;
+                return `<div class="param-row"><span>${safeKey}</span><span>${display}</span></div>`;
               });
-            if (entries.length) {
-              summary.push({ label: 'R²', value: entries.join('<br>') });
+            if (rows.length) {
+              summary.push({ label: 'R²', value: `<div class="param-grid">${rows.join('')}</div>` });
             }
           }
           if (meta.optimizer) {
@@ -1005,7 +1036,7 @@ class MonitorPageTemplate:
             const safeLabel = typeof label === 'string' ? escapeHtml(label) : escapeHtml(String(label));
             summary.push({ label: 'Optimizer', value: safeLabel });
           }
-          const paramCard = buildParameterCard(data);
+          const paramCard = buildParameterCard(data, iteration);
           if (paramCard) {
             summary.push(paramCard);
           }
@@ -1016,7 +1047,13 @@ class MonitorPageTemplate:
             </dl>`).join('') || "<p style='opacity:0.6;'>No summary metadata</p>";
         }
 
-        function buildParameterCard(data) {
+        function refreshSummaryView() {
+          if (currentDetailData) {
+            renderSummary(currentDetailData);
+          }
+        }
+
+        function buildParameterCard(data, iterationEntry) {
           if (!data) {
             return null;
           }
@@ -1025,13 +1062,21 @@ class MonitorPageTemplate:
             ? parameterMeta.names.filter(name => typeof name === 'string')
             : [];
           const theta0 = Array.isArray(parameterMeta.theta0) ? parameterMeta.theta0 : null;
+          const iterationTheta =
+            iterationEntry && iterationEntry.theta && typeof iterationEntry.theta === 'object'
+              ? iterationEntry.theta
+              : null;
           const latestTheta = latestThetaSnapshot(data);
+          const thetaSource =
+            iterationTheta && Object.keys(iterationTheta).length ? iterationTheta : latestTheta;
           const rows = [];
           const seen = new Set();
           names.forEach((name, idx) => {
             let value;
-            if (latestTheta && Object.prototype.hasOwnProperty.call(latestTheta, name)) {
-              value = latestTheta[name];
+            if (iterationTheta && Object.prototype.hasOwnProperty.call(iterationTheta, name)) {
+              value = iterationTheta[name];
+            } else if (thetaSource && Object.prototype.hasOwnProperty.call(thetaSource, name)) {
+              value = thetaSource[name];
             } else if (theta0 && theta0[idx] !== undefined) {
               value = theta0[idx];
             }
@@ -1040,8 +1085,8 @@ class MonitorPageTemplate:
               seen.add(name);
             }
           });
-          if (latestTheta) {
-            Object.entries(latestTheta).forEach(([name, value]) => {
+          if (thetaSource) {
+            Object.entries(thetaSource).forEach(([name, value]) => {
               if (typeof name === 'string' && !seen.has(name)) {
                 rows.push(`<div class="param-row"><span>${escapeHtml(name)}</span><span>${formatParameterValue(value)}</span></div>`);
               }
@@ -1168,7 +1213,7 @@ class MonitorPageTemplate:
           detailJson.style.visibility = 'hidden';
           selectedRunId = null;
           currentSeriesData = {};
-           currentDetailData = null;
+          currentDetailData = null;
           if (seriesSelect) {
             seriesSelect.innerHTML = '';
             seriesSelect.disabled = true;
@@ -1189,8 +1234,8 @@ class MonitorPageTemplate:
           }
           iterationSeriesByIndex = {};
           latestSeriesIndex = null;
-          lockedSeriesIndex = null;
-          updateSeriesLockUi();
+          lockedIterationIndex = null;
+          updateIterationLockUi();
         }
 
         function renderSeries(series) {
@@ -1302,14 +1347,17 @@ class MonitorPageTemplate:
         }
 
         function applySeriesFromIndex(index, { lockMode = 'clear', silent = false } = {}) {
-          if (typeof index !== 'number' || !iterationSeriesByIndex || !Object.prototype.hasOwnProperty.call(iterationSeriesByIndex, index)) {
+          const hasEntry =
+            typeof index === 'number'
+            && iterationSeriesByIndex
+            && Object.prototype.hasOwnProperty.call(iterationSeriesByIndex, index);
+          if (!hasEntry) {
             if (!silent) {
               renderSeries(null);
             }
-            if (lockMode !== 'preserve') {
-              lockedSeriesIndex = null;
-              updateSeriesLockUi();
-            }
+            lockedIterationIndex = null;
+            updateIterationLockUi();
+            refreshSummaryView();
             return false;
           }
           const dataset = iterationSeriesByIndex[index];
@@ -1317,32 +1365,47 @@ class MonitorPageTemplate:
             if (!silent) {
               renderSeries(null);
             }
-            if (lockMode !== 'preserve') {
-              lockedSeriesIndex = null;
-              updateSeriesLockUi();
-            }
+            lockedIterationIndex = null;
+            updateIterationLockUi();
+            refreshSummaryView();
             return false;
           }
           if (lockMode === 'lock') {
-            lockedSeriesIndex = index;
+            lockedIterationIndex = index;
           } else if (lockMode === 'clear') {
-            lockedSeriesIndex = null;
+            lockedIterationIndex = null;
           }
           renderSeries(dataset);
-          updateSeriesLockUi();
+          updateIterationLockUi();
+          refreshSummaryView();
           return true;
         }
 
-        function updateSeriesLockUi() {
-          if (!seriesLiveBtn) {
+        function formatIterationLabel(index) {
+          if (typeof index !== 'number') {
+            return null;
+          }
+          if (!currentDetailData || !Array.isArray(currentDetailData.iterations)) {
+            return index;
+          }
+          const entry = currentDetailData.iterations[index];
+          if (entry && typeof entry.index === 'number') {
+            return entry.index;
+          }
+          return index;
+        }
+
+        function updateIterationLockUi() {
+          if (!detailLiveBtn) {
             return;
           }
-          if (lockedSeriesIndex === null) {
-            seriesLiveBtn.style.display = 'none';
-            seriesLiveBtn.textContent = 'Back to latest';
+          if (lockedIterationIndex === null) {
+            detailLiveBtn.style.display = 'none';
+            detailLiveBtn.textContent = 'Back to latest';
           } else {
-            seriesLiveBtn.style.display = '';
-            seriesLiveBtn.textContent = `Back to latest (current: iter ${lockedSeriesIndex})`;
+            const label = formatIterationLabel(lockedIterationIndex);
+            detailLiveBtn.style.display = '';
+            detailLiveBtn.textContent = `Back to latest (current: iter ${label ?? lockedIterationIndex})`;
           }
         }
 
@@ -1351,14 +1414,15 @@ class MonitorPageTemplate:
             renderSeriesChart(event.target.value);
           });
         }
-        if (seriesLiveBtn) {
-          seriesLiveBtn.addEventListener('click', () => {
-            lockedSeriesIndex = null;
+        if (detailLiveBtn) {
+          detailLiveBtn.addEventListener('click', () => {
+            lockedIterationIndex = null;
             if (typeof latestSeriesIndex === 'number') {
               applySeriesFromIndex(latestSeriesIndex, { lockMode: 'clear' });
             } else {
               renderSeries(null);
-              updateSeriesLockUi();
+              updateIterationLockUi();
+              refreshSummaryView();
             }
           });
         }

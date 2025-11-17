@@ -13,12 +13,12 @@ from interFEBio.Optimize.feb_bindings import FebTemplate, ParameterBinding
 from interFEBio.Optimize.options import (
     CleanupOptions,
     EngineOptions,
+    GridPolicyOptions,
     JacobianOptions,
     MonitorOptions,
     OptimizerOptions,
     RunnerOptions,
     StorageOptions,
-    GridPolicyOptions,
 )
 from interFEBio.Optimize.Parameters import ParameterSpace
 from interFEBio.XPLT import xplt
@@ -58,7 +58,7 @@ def build_case(exp_series: ExperimentSeries, name: str) -> SimulationCase:
     )
     return SimulationCase(
         template=template,
-        subfolder="",
+        subfolder="biaxial",
         experiments={name: exp_series},
         adapters={name: SimulationAdapter(read_sigma_xx)},
         omp_threads=1,
@@ -73,15 +73,15 @@ def main() -> None:
     exp_series = ExperimentSeries(x=exp_data[:, 0], y=exp_data[:, 1])
 
     parameter_space = ParameterSpace(xi=2.0)
-    parameter_space.add_parameter(name="G", theta0=0.5, bounds=(0, 10))
+    parameter_space.add_parameter(name="G", theta0=0.11, bounds=(0, 10))
     case = build_case(exp_series, "biax1")
     case2 = build_case(exp_series, "biax2")
 
     options = EngineOptions(
-        jacobian=JacobianOptions(enabled=True, perturbation=1e-4, parallel=True),
-        cleanup=CleanupOptions(remove_previous=True, mode="retain_best"),
+        jacobian=JacobianOptions(enabled=True, perturbation=1e-3, parallel=True),
+        cleanup=CleanupOptions(remove_previous=True, mode="all"),
         runner=RunnerOptions(jobs=PARALLEL_JOBS, command=FEBIO_COMMAND),
-        storage=StorageOptions(mode="tmp", root=WORK_ROOT),
+        storage=StorageOptions(mode="disk", root=WORK_ROOT),
         monitor=MonitorOptions(enabled=True),
         optimizer=OptimizerOptions(
             name="least_squares",
@@ -99,7 +99,7 @@ def main() -> None:
         options=options,
     )
 
-    result = engine.run()
+    _result = engine.run()
 
 
 if __name__ == "__main__":
